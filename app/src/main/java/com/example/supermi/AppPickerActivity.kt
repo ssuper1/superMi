@@ -1,7 +1,7 @@
 package com.example.supermi
 
 import android.content.Intent
-import android.content.pm.ApplicationInfo
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.text.Editable
@@ -105,6 +105,15 @@ class AppPickerActivity : AppCompatActivity() {
             confirm.setOnClickListener { confirmSelection() }
         }
 
+        findViewById<Button>(R.id.btn_picker_refresh).setOnClickListener {
+            AppListCache.invalidate(this)
+            reloadApps()
+        }
+
+        reloadApps()
+    }
+
+    private fun reloadApps() {
         findViewById<View>(R.id.progress_load).visibility = View.VISIBLE
         Thread {
             val apps = loadApps().sortedWith(
@@ -118,7 +127,7 @@ class AppPickerActivity : AppCompatActivity() {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 allApps = apps
                 findViewById<View>(R.id.progress_load).visibility = View.GONE
-                applyFilter("")
+                applyFilter(findViewById<EditText>(R.id.et_search).text.toString())
                 renderHistory()
                 updateConfirm()
             }
@@ -195,39 +204,17 @@ class AppPickerActivity : AppCompatActivity() {
     }
 
     private fun loadApps(): List<AppInfo> {
-        val pm = packageManager
-        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        return try {
-            pm.queryIntentActivities(intent, 0)
-                .asSequence()
-                .mapNotNull { it.activityInfo?.applicationInfo?.packageName }
-                .distinct()
-                .sortedBy {
-                    try {
-                        pm.getApplicationLabel(pm.getApplicationInfo(it, 0)).toString()
-                    } catch (_: Throwable) {
-                        it
-                    }
-                }
-                .mapNotNull { pkg ->
-                    val ai: ApplicationInfo = try {
-                        pm.getApplicationInfo(pkg, 0)
-                    } catch (_: Throwable) {
-                        return@mapNotNull null
-                    }
-                    val icon = IconUtil.rounded(
-                        pm.getApplicationIcon(ai), dp(40), dp(10).toFloat(), resources
-                    )
-                    AppInfo(
-                        pm.getApplicationLabel(ai).toString(),
-                        pkg,
-                        icon,
-                        (ai.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                    )
-                }
-                .toList()
-        } catch (_: Throwable) {
-            emptyList()
+        val cached = AppListCache.cached(this)?.takeIf { it.isNotEmpty() }
+        val src = cached ?: AppListCache.rebuild(this)
+        return src.map { c ->
+            val icon = AppListCache.loadIcon(this, c.pkg)
+                ?: runCatching {
+                    val ai = packageManager.getApplicationInfo(c.pkg, 0)
+                    val bmp = AppListCache.roundIcon(resources, packageManager.getApplicationIcon(ai))
+                    AppListCache.saveIcon(this, c.pkg, bmp)
+                    BitmapDrawable(resources, bmp)
+                }.getOrElse { packageManager.defaultActivityIcon }
+            AppInfo(c.label, c.pkg, icon, c.isSystem)
         }
     }
 

@@ -139,6 +139,15 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.row_export).setOnClickListener { exportConfig() }
         findViewById<View>(R.id.row_import).setOnClickListener { importLauncher.launch(arrayOf("text/plain", "application/octet-stream")) }
 
+        findViewById<Button>(R.id.btn_refresh_apps).setOnClickListener {
+            Toast.makeText(this, "正在后台刷新应用列表…", Toast.LENGTH_SHORT).show()
+            AppListCache.refreshAsync(applicationContext) {
+                runOnUiThread {
+                    Toast.makeText(this, "应用列表已刷新", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
         findViewById<Button>(R.id.btn_len_50).setOnClickListener { setMaxLen(50) }
         findViewById<Button>(R.id.btn_len_100).setOnClickListener { setMaxLen(100) }
         findViewById<Button>(R.id.btn_len_150).setOnClickListener { setMaxLen(150) }

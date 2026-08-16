@@ -52,9 +52,10 @@
         </FrameLayout>
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
+            android:layout_weight="1"
             android:orientation="vertical">
 
             <TextView
@@ -73,6 +74,21 @@
                 android:textColor="@color/white"
                 android:textSize="11sp" />
         </LinearLayout>
+
+        <Button
+            android:id="@+id/btn_refresh_apps"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:background="@drawable/bg_btn_header"
+            app:backgroundTint="@null"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:stateListAnimator="@null"
+            android:text="↻刷新app"
+            android:textColor="@color/white"
+            android:textSize="12sp" />
     </LinearLayout>
 
     <!-- ===== 滚动内容 ===== -->
