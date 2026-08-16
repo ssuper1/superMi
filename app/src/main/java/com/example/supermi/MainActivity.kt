@@ -52,6 +52,7 @@ class MainActivity : AppCompatActivity() {
     private var gap23_3: Int = 6
     private var iconSize: Int = BubblePrefs.DEFAULT_ICON_SIZE
     private var bgAlpha: Int = BubblePrefs.DEFAULT_BG_ALPHA
+    private var dismissSecs: Int = BubblePrefs.DEFAULT_DISMISS_SECS
     private var pendingType: String = BubblePosProvider.KEY_ADDR_APP
 
     private val exportLauncher = registerForActivityResult(
@@ -127,6 +128,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.sw_debug).apply {
+            isSaveEnabled = false
             isChecked = debugEnabled
             setOnCheckedChangeListener { _, checked ->
                 debugEnabled = checked
@@ -154,6 +156,10 @@ class MainActivity : AppCompatActivity() {
         setupBgAlphaSeekBar(R.id.seek_bg_alpha, R.id.tv_bg_alpha, bgAlpha) { bgAlpha = it }
         findViewById<Button>(R.id.btn_reset_bg_alpha).setOnClickListener {
             setBgAlpha(BubblePrefs.DEFAULT_BG_ALPHA)
+        }
+        setupDismissSeekBar(R.id.seek_dismiss, R.id.tv_dismiss, dismissSecs) { dismissSecs = it }
+        findViewById<Button>(R.id.btn_reset_dismiss).setOnClickListener {
+            setDismissSecs(BubblePrefs.DEFAULT_DISMISS_SECS)
         }
         findViewById<android.widget.SeekBar>(R.id.seek_gap12).setOnSeekBarChangeListener(gapListener(1))
         findViewById<android.widget.SeekBar>(R.id.seek_gap23).setOnSeekBarChangeListener(gapListener(2))
@@ -201,6 +207,8 @@ class MainActivity : AppCompatActivity() {
         val tv12 = findViewById<TextView>(R.id.tv_gap12)
         val tv23 = findViewById<TextView>(R.id.tv_gap23)
         val v12 = currentGap12()
+        seek12.isSaveEnabled = false
+        seek23.isSaveEnabled = false
         seek12.isEnabled = n >= 2
         seek23.isEnabled = n >= 3
         seek12.progress = v12
@@ -217,6 +225,7 @@ class MainActivity : AppCompatActivity() {
     ) {
         val seek = findViewById<android.widget.SeekBar>(seekId)
         val tv = findViewById<TextView>(tvId)
+        seek.isSaveEnabled = false
         seek.max = BubblePrefs.ICON_SIZE_MAX - BubblePrefs.ICON_SIZE_MIN
         seek.progress = (initial - BubblePrefs.ICON_SIZE_MIN).coerceIn(0, seek.max)
         tv.text = "$initial"
@@ -253,6 +262,7 @@ class MainActivity : AppCompatActivity() {
     ) {
         val seek = findViewById<android.widget.SeekBar>(seekId)
         val tv = findViewById<TextView>(tvId)
+        seek.isSaveEnabled = false
         seek.max = 100
         seek.progress = initial.coerceIn(0, 100)
         tv.text = "$initial"
@@ -278,6 +288,41 @@ class MainActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.tv_bg_alpha).text = "$v"
         saveConfig()
         refreshPreview()
+    }
+
+    private fun setupDismissSeekBar(
+        seekId: Int,
+        tvId: Int,
+        initial: Int,
+        update: (Int) -> Unit
+    ) {
+        val seek = findViewById<android.widget.SeekBar>(seekId)
+        val tv = findViewById<TextView>(tvId)
+        seek.isSaveEnabled = false
+        seek.max = 9
+        seek.progress = initial.coerceIn(1, 10) - 1
+        tv.text = "${initial.coerceIn(1, 10)}s"
+        seek.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                if (!fromUser) return
+                val v = (progress + 1).coerceIn(1, 10)
+                tv.text = "${v}s"
+                update(v)
+                saveConfig()
+            }
+
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+        })
+    }
+
+    private fun setDismissSecs(value: Int) {
+        val v = value.coerceIn(1, 10)
+        dismissSecs = v
+        findViewById<android.widget.SeekBar>(R.id.seek_dismiss).progress = v - 1
+        findViewById<TextView>(R.id.tv_dismiss).text = "${v}s"
+        saveConfig()
     }
 
     private fun refreshPreview() {
@@ -577,6 +622,8 @@ class MainActivity : AppCompatActivity() {
             ?: fromSettings("icon_size", iconSize)
         bgAlpha = m[BubblePosProvider.KEY_BG_ALPHA]?.toIntOrNull()?.coerceIn(0, 100)
             ?: fromSettings("bg_alpha", bgAlpha)
+        dismissSecs = m[BubblePosProvider.KEY_DISMISS_SECS]?.toIntOrNull()?.coerceIn(1, 10)
+            ?: fromSettings("dismiss_secs", dismissSecs)
         BubblePosProvider.platformRulesJson = m[PlatformRuleStore.KEY_PLATFORM_RULES]
             ?: fromSettingsString(PlatformRuleStore.KEY_PLATFORM_RULES)
             ?: PlatformRuleStore.toJson(PlatformRuleStore.DEFAULT_RULES)
@@ -599,6 +646,7 @@ class MainActivity : AppCompatActivity() {
         BubblePosProvider.maxLen = maxLen
         BubblePosProvider.iconSize = iconSize
         BubblePosProvider.bgAlpha = bgAlpha
+        BubblePosProvider.dismissSecs = dismissSecs
         BubblePosProvider.gap12_2 = gap12_2
         BubblePosProvider.gap12_3 = gap12_3
         BubblePosProvider.gap23_3 = gap23_3
@@ -624,6 +672,7 @@ class MainActivity : AppCompatActivity() {
         m[BubblePosProvider.KEY_GAP23_3] = "$gap23_3"
         m[BubblePosProvider.KEY_ICON_SIZE] = "$iconSize"
         m[BubblePosProvider.KEY_BG_ALPHA] = "$bgAlpha"
+        m[BubblePosProvider.KEY_DISMISS_SECS] = "$dismissSecs"
         if (!m.containsKey(PlatformRuleStore.KEY_PLATFORM_RULES)) {
             m[PlatformRuleStore.KEY_PLATFORM_RULES] = PlatformRuleStore.toJson(PlatformRuleStore.DEFAULT_RULES)
         }

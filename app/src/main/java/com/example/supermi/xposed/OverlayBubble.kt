@@ -22,7 +22,6 @@ import de.robv.android.xposed.XposedBridge
 object OverlayBubble {
 
     private const val TAG = "SuperMi"
-    private const val SHOW_DURATION_MS = 6000L
     private const val DEDUP_WINDOW_MS = 3000L
     private const val MAX_TARGETS = 3
     private const val RESOLVE_CACHE_SIZE = 16
@@ -328,7 +327,7 @@ object OverlayBubble {
             bubbleView = row
             val dr = Runnable { dismiss() }
             dismissRunnable = dr
-            mainHandler.postDelayed(dr, SHOW_DURATION_MS)
+            mainHandler.postDelayed(dr, BubblePrefs.dismissMs(ctx))
         } catch (t: Throwable) {
             DebugToast.log("addView failed", t)
             DebugToast.show(ctx, "气泡添加失败: ${t.message}")
