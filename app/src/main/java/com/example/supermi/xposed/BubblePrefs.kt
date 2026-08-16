@@ -70,6 +70,7 @@ object BubblePrefs {
     const val DEFAULT_ICON_SIZE = 24
     const val ICON_SIZE_MIN = 16
     const val ICON_SIZE_MAX = 48
+    const val DEFAULT_BG_ALPHA = 85
 
     fun iconSizeDp(ctx: Context?): Int {
         val v = config(ctx)?.getInt("icon_size") ?: Settings.System.getInt(
@@ -77,6 +78,14 @@ object BubblePrefs {
             "supermi_icon_size", DEFAULT_ICON_SIZE
         )
         return v.coerceIn(ICON_SIZE_MIN, ICON_SIZE_MAX)
+    }
+
+    fun bgAlpha(ctx: Context?): Int {
+        val v = config(ctx)?.getInt("bg_alpha") ?: Settings.System.getInt(
+            ctx?.contentResolver ?: return DEFAULT_BG_ALPHA,
+            "supermi_bg_alpha", DEFAULT_BG_ALPHA
+        )
+        return v.coerceIn(0, 100)
     }
 
     fun maxLen(ctx: Context?): Int {
@@ -150,7 +159,8 @@ object BubblePrefs {
             b.getInt("max_len", DEFAULT_MAX_LEN).toString(),
             b.getInt("gap12_2", 6).toString(),
             b.getInt("gap12_3", 6).toString(),
-            b.getInt("gap23_3", 6).toString()
+            b.getInt("gap23_3", 6).toString(),
+            b.getInt("bg_alpha", DEFAULT_BG_ALPHA).toString()
         ).joinToString("\u0000")
 
     private fun persistSettings(ctx: Context, b: Bundle) {
@@ -168,6 +178,7 @@ object BubblePrefs {
             Settings.System.putInt(cr, "supermi_num_default_min", b.getInt("num_default_min", DEFAULT_LEN_MIN))
             Settings.System.putInt(cr, "supermi_num_default_max", b.getInt("num_default_max", DEFAULT_LEN_MAX))
             Settings.System.putInt(cr, "supermi_icon_size", b.getInt("icon_size", DEFAULT_ICON_SIZE))
+            Settings.System.putInt(cr, "supermi_bg_alpha", b.getInt("bg_alpha", DEFAULT_BG_ALPHA))
             Settings.System.putInt(cr, KEY_MAX_LEN, b.getInt("max_len", DEFAULT_MAX_LEN))
             Settings.System.putInt(cr, "supermi_gap12_2", b.getInt("gap12_2", 6))
             Settings.System.putInt(cr, "supermi_gap12_3", b.getInt("gap12_3", 6))
@@ -192,6 +203,7 @@ object BubblePrefs {
             putInt("num_default_min", Settings.System.getInt(cr, "supermi_num_default_min", DEFAULT_LEN_MIN))
             putInt("num_default_max", Settings.System.getInt(cr, "supermi_num_default_max", DEFAULT_LEN_MAX))
             putInt("icon_size", Settings.System.getInt(cr, "supermi_icon_size", DEFAULT_ICON_SIZE))
+            putInt("bg_alpha", Settings.System.getInt(cr, "supermi_bg_alpha", DEFAULT_BG_ALPHA))
             putInt("max_len", Settings.System.getInt(cr, KEY_MAX_LEN, DEFAULT_MAX_LEN))
             putInt("gap12_2", Settings.System.getInt(cr, "supermi_gap12_2", Settings.System.getInt(cr, "supermi_gap12", 6)))
             putInt("gap12_3", Settings.System.getInt(cr, "supermi_gap12_3", Settings.System.getInt(cr, "supermi_gap12", 6)))

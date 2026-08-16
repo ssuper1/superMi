@@ -278,7 +278,8 @@ object OverlayBubble {
             setPadding(dp(padH), dp(padV), dp(padH), dp(padV))
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                setColor(Color.parseColor("#D93C3C3C"))
+                val a = BubblePrefs.bgAlpha(ctx) * 255 / 100
+                setColor(Color.argb(a, 0x3C, 0x3C, 0x3C))
                 cornerRadius = dp(corner).toFloat()
             }
         }

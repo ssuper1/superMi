@@ -15,7 +15,9 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -49,7 +51,23 @@ class MainActivity : AppCompatActivity() {
     private var gap12_3: Int = 6
     private var gap23_3: Int = 6
     private var iconSize: Int = BubblePrefs.DEFAULT_ICON_SIZE
+    private var bgAlpha: Int = BubblePrefs.DEFAULT_BG_ALPHA
     private var pendingType: String = BubblePosProvider.KEY_ADDR_APP
+
+    private val exportLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        if (uri != null) {
+            val ok = writeExport(uri)
+            Toast.makeText(this, if (ok) "已导出配置" else "导出失败", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private val importLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) importConfig(uri)
+    }
 
     private val pickerLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
@@ -116,6 +134,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        findViewById<View>(R.id.row_export).setOnClickListener { exportConfig() }
+        findViewById<View>(R.id.row_import).setOnClickListener { importLauncher.launch(arrayOf("text/plain", "application/octet-stream")) }
+
         findViewById<Button>(R.id.btn_len_50).setOnClickListener { setMaxLen(50) }
         findViewById<Button>(R.id.btn_len_100).setOnClickListener { setMaxLen(100) }
         findViewById<Button>(R.id.btn_len_150).setOnClickListener { setMaxLen(150) }
@@ -129,6 +150,10 @@ class MainActivity : AppCompatActivity() {
         setupIconSeekBar(R.id.seek_icon, R.id.tv_icon, iconSize) { iconSize = it }
         findViewById<Button>(R.id.btn_reset_icon).setOnClickListener {
             setIconSize(BubblePrefs.DEFAULT_ICON_SIZE)
+        }
+        setupBgAlphaSeekBar(R.id.seek_bg_alpha, R.id.tv_bg_alpha, bgAlpha) { bgAlpha = it }
+        findViewById<Button>(R.id.btn_reset_bg_alpha).setOnClickListener {
+            setBgAlpha(BubblePrefs.DEFAULT_BG_ALPHA)
         }
         findViewById<android.widget.SeekBar>(R.id.seek_gap12).setOnSeekBarChangeListener(gapListener(1))
         findViewById<android.widget.SeekBar>(R.id.seek_gap23).setOnSeekBarChangeListener(gapListener(2))
@@ -216,6 +241,41 @@ class MainActivity : AppCompatActivity() {
         iconSize = v
         findViewById<android.widget.SeekBar>(R.id.seek_icon).progress = v - BubblePrefs.ICON_SIZE_MIN
         findViewById<TextView>(R.id.tv_icon).text = "$v"
+        saveConfig()
+        refreshPreview()
+    }
+
+    private fun setupBgAlphaSeekBar(
+        seekId: Int,
+        tvId: Int,
+        initial: Int,
+        update: (Int) -> Unit
+    ) {
+        val seek = findViewById<android.widget.SeekBar>(seekId)
+        val tv = findViewById<TextView>(tvId)
+        seek.max = 100
+        seek.progress = initial.coerceIn(0, 100)
+        tv.text = "$initial"
+        seek.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                if (!fromUser) return
+                tv.text = "$progress"
+                update(progress)
+                saveConfig()
+                refreshPreview()
+            }
+
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+        })
+    }
+
+    private fun setBgAlpha(value: Int) {
+        val v = value.coerceIn(0, 100)
+        bgAlpha = v
+        findViewById<android.widget.SeekBar>(R.id.seek_bg_alpha).progress = v
+        findViewById<TextView>(R.id.tv_bg_alpha).text = "$v"
         saveConfig()
         refreshPreview()
     }
@@ -515,6 +575,8 @@ class MainActivity : AppCompatActivity() {
         iconSize = m[BubblePosProvider.KEY_ICON_SIZE]?.toIntOrNull()
             ?.coerceIn(BubblePrefs.ICON_SIZE_MIN, BubblePrefs.ICON_SIZE_MAX)
             ?: fromSettings("icon_size", iconSize)
+        bgAlpha = m[BubblePosProvider.KEY_BG_ALPHA]?.toIntOrNull()?.coerceIn(0, 100)
+            ?: fromSettings("bg_alpha", bgAlpha)
         BubblePosProvider.platformRulesJson = m[PlatformRuleStore.KEY_PLATFORM_RULES]
             ?: fromSettingsString(PlatformRuleStore.KEY_PLATFORM_RULES)
             ?: PlatformRuleStore.toJson(PlatformRuleStore.DEFAULT_RULES)
@@ -536,6 +598,10 @@ class MainActivity : AppCompatActivity() {
         BubblePosProvider.debug = debugEnabled
         BubblePosProvider.maxLen = maxLen
         BubblePosProvider.iconSize = iconSize
+        BubblePosProvider.bgAlpha = bgAlpha
+        BubblePosProvider.gap12_2 = gap12_2
+        BubblePosProvider.gap12_3 = gap12_3
+        BubblePosProvider.gap23_3 = gap23_3
     }
 
     private fun saveConfig() {
@@ -557,6 +623,7 @@ class MainActivity : AppCompatActivity() {
         m[BubblePosProvider.KEY_GAP12_3] = "$gap12_3"
         m[BubblePosProvider.KEY_GAP23_3] = "$gap23_3"
         m[BubblePosProvider.KEY_ICON_SIZE] = "$iconSize"
+        m[BubblePosProvider.KEY_BG_ALPHA] = "$bgAlpha"
         if (!m.containsKey(PlatformRuleStore.KEY_PLATFORM_RULES)) {
             m[PlatformRuleStore.KEY_PLATFORM_RULES] = PlatformRuleStore.toJson(PlatformRuleStore.DEFAULT_RULES)
         }
@@ -564,6 +631,43 @@ class MainActivity : AppCompatActivity() {
             m[NumberRuleStore.KEY_NUMBER_RULES] = NumberRuleStore.toJson(NumberRuleStore.DEFAULT_RULES)
         }
         AppConfig.write(this, m)
+    }
+
+    private fun exportConfig() {
+        saveConfig()
+        exportLauncher.launch("supermi_config_backup.txt")
+    }
+
+    private fun writeExport(uri: Uri): Boolean {
+        return try {
+            val content = AppConfig.read(this).entries.joinToString("\n") { "${it.key}=${it.value}" } + "\n"
+            contentResolver.openOutputStream(uri)?.use { os ->
+                os.write(content.toByteArray(Charsets.UTF_8))
+            } != null
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun importConfig(uri: Uri) {
+        try {
+            val text = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                ?: throw IllegalStateException("无法读取文件")
+            val imported = mutableMapOf<String, String>()
+            for (line in text.lines()) {
+                val i = line.indexOf('=')
+                if (i > 0) imported[line.substring(0, i).trim()] = line.substring(i + 1).trim()
+            }
+            if (imported.isEmpty()) {
+                Toast.makeText(this, "文件为空或格式不正确", Toast.LENGTH_SHORT).show()
+                return
+            }
+            AppConfig.write(this, imported)
+            Toast.makeText(this, "导入成功", Toast.LENGTH_SHORT).show()
+            recreate()
+        } catch (_: Throwable) {
+            Toast.makeText(this, "导入失败", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun fromSettings(key: String, def: Int): Int = try {
@@ -585,7 +689,8 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(8), dp(4), dp(8), dp(4))
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                setColor(Color.parseColor("#D93C3C3C"))
+                val a = bgAlpha * 255 / 100
+                setColor(Color.argb(a, 0x3C, 0x3C, 0x3C))
                 cornerRadius = dp(16).toFloat()
             }
         }
