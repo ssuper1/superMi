@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SuperMi 美化预览</title>
+<style>
+  :root {
+    --accent: #2E86DE;
+    --accent-2: #56A6F5;
+    --accent-soft: rgba(46, 134, 222, 0.12);
+    --accent-deep: #1B5FB8;
+    --bg: #F4F5FA;
+    --card: #FFFFFF;
+    --text: #1F2430;
+    --text-2: #6B7280;
+    --text-3: #9CA3AF;
+    --border: #EEF0F6;
+    --danger: #E74C3C;
+    --ok: #27AE60;
+    --radius: 16px;
+    --shadow: 0 4px 16px rgba(31, 36, 48, 0.06);
+    --shadow-lg: 0 12px 32px rgba(31, 36, 48, 0.12);
+    --header-h: 64px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    background:
+      radial-gradient(1200px 600px at 20% -10%, rgba(108, 92, 231, 0.18), transparent 60%),
+      radial-gradient(1000px 500px at 100% 0%, rgba(46, 134, 222, 0.14), transparent 60%),
+      #EEF0F8;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    color: var(--text);
+  }
+
+  .stage { display: flex; gap: 40px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+
+  /* ===== 手机壳 ===== */
+  .phone {
+    width: 390px;
+    background: var(--bg);
+    border-radius: 44px;
+    box-shadow: var(--shadow-lg), 0 0 0 10px #1C2030, 0 0 0 12px #31374A;
+    overflow: hidden;
+    position: relative;
+    height: 780px;
+    display: flex;
+    flex-direction: column;
+  }
+  .phone::before {
+    content: "";
+    position: absolute;
+    top: 10px; left: 50%;
+    transform: translateX(-50%);
+    width: 120px; height: 26px;
+    background: #1C2030;
+    border-radius: 20px;
+    z-index: 60;
+  }
+  .screen { flex: 1; overflow: hidden; display: flex; flex-direction: column; background: var(--bg); }
+
+  /* ===== 顶部状态栏模拟 ===== */
+  .statusbar {
+    height: 34px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    font-size: 12px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 24px 6px;
+    font-weight: 600;
+  }
+  .statusbar .dots { display: flex; gap: 4px; align-items: center; }
+  .statusbar .dot { width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,.85); }
+
+  /* ===== AppBar ===== */
+  .appbar {
+    height: var(--header-h);
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    color: #fff;
+    position: relative;
+  }
+  .appbar .logo {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    background: rgba(255,255,255,.18);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    margin-right: 12px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.25);
+  }
+  .appbar .titles h1 { font-size: 17px; font-weight: 700; letter-spacing: .5px; }
+  .appbar .titles p { font-size: 11px; opacity: .85; margin-top: 1px; }
+  .appbar .actions { margin-left: auto; display: flex; gap: 10px; }
+  .appbar .icon-btn {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: rgba(255,255,255,.16);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; cursor: pointer; border: none; color: #fff;
+  }
+  .appbar .icon-btn:active { background: rgba(255,255,255,.3); }
+
+  /* ===== 内容滚动 ===== */
+  .content { flex: 1; overflow-y: auto; padding: 16px 16px 24px; scrollbar-width: none; }
+  .content::-webkit-scrollbar { display: none; }
+
+  /* ===== 卡片 ===== */
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .card-header {
+    display: flex; align-items: center;
+    padding: 14px 16px 0;
+  }
+  .card-header .t {
+    font-size: 14px; font-weight: 700; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-header .t .ico {
+    width: 26px; height: 26px; border-radius: 8px;
+    background: var(--accent-soft); color: var(--accent);
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
+  }
+  .card-header .sub { font-size: 11px; color: var(--text-3); margin-left: auto; }
+
+  .preview-hint {
+    margin: 12px 16px 2px;
+    font-size: 12px; color: var(--text-2); line-height: 1.7;
+    background: var(--accent-soft); border-radius: 10px; padding: 10px 12px;
+  }
+  .preview-hint b { color: var(--accent); }
+
+  .step-row {
+    display: flex; align-items: center; gap: 10px;
+    margin: 2px 16px 8px;
+  }
+  .step-label { font-size: 12px; color: var(--text-3); font-weight: 600; }
+  .seg {
+    display: flex; background: var(--bg);
+    border-radius: 10px; padding: 3px;
+  }
+  .seg-btn {
+    border: none; background: transparent;
+    width: 36px; height: 30px; border-radius: 8px;
+    font-size: 13px; font-weight: 700; color: var(--text-3); cursor: pointer;
+    transition: all .12s;
+  }
+  .seg-btn.active {
+    background: #fff; color: var(--accent);
+    box-shadow: 0 2px 6px rgba(0,0,0,.12);
+  }
+  .step-unit { font-size: 11px; color: var(--text-3); }
+  .reset-btn {
+    margin-left: auto;
+    border: none; background: var(--bg); color: var(--text-2);
+    font-size: 12px; font-weight: 600;
+    padding: 7px 12px; border-radius: 8px; cursor: pointer;
+  }
+  .reset-btn:active { background: var(--accent-soft); color: var(--accent); }
+
+  .pos-controls {
+    display: flex; align-items: center; justify-content: center; gap: 16px;
+    padding: 4px 16px 16px;
+  }
+  .dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 42px);
+    grid-template-rows: repeat(3, 42px);
+    gap: 4px;
+  }
+  .dpad button {
+    border: none; border-radius: 12px;
+    background: var(--bg); color: var(--text);
+    font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    transition: background .12s, transform .06s;
+  }
+  .dpad button:active { background: var(--accent-soft); color: var(--accent); transform: scale(.94); }
+  .dpad .step-sm { font-size: 10px; color: var(--text-3); }
+
+  .pos-readout {
+    text-align: center;
+  }
+  .pos-readout .val {
+    font-size: 22px; font-weight: 800; color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", "JetBrains Mono", Consolas, monospace;
+  }
+  .pos-readout .lbl { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+
+  /* ===== 真实悬浮气泡 ===== */
+  .float-bubble {
+    position: fixed; z-index: 1000;
+    display: none; align-items: center; justify-content: center; gap: 8px;
+    padding: 10px 18px;
+    background: rgba(28,32,48,.88);
+    border-radius: 999px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.35);
+    cursor: grab; user-select: none;
+    transform: translateX(-50%);
+    touch-action: none;
+  }
+  .float-bubble.dragging { cursor: grabbing; box-shadow: 0 12px 36px rgba(108,92,231,.4); }
+  .float-bubble .fb-ico { font-size: 20px; }
+  .float-bubble .fb-label { font-size: 12px; color: rgba(255,255,255,.85); }
+  .float-bubble .fb-badge {
+    position: absolute; top: -5px; right: -5px;
+    width: 17px; height: 17px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    font-size: 9px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,.35);
+  }
+
+  /* ===== 按钮 ===== */
+  .row-btns { display: flex; gap: 10px; padding: 0 16px 16px; }
+  .btn {
+    flex: 1;
+    border: none; border-radius: 12px;
+    height: 42px;
+    font-size: 14px; font-weight: 600;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    transition: transform .06s, opacity .15s;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(108,92,231,.35);
+  }
+  .btn-ghost { background: var(--bg); color: var(--text); }
+  .btn-outline { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+
+  /* ===== 列表项 ===== */
+  .list-item {
+    display: flex; align-items: center;
+    padding: 13px 16px;
+    gap: 12px;
+    cursor: pointer;
+    position: relative;
+  }
+  .list-item + .list-item::before {
+    content: ""; position: absolute; top: 0; left: 54px; right: 16px;
+    height: 1px; background: var(--border);
+  }
+  .list-item:active { background: rgba(108,92,231,.05); }
+  .list-item .li-ico {
+    width: 40px; height: 40px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 19px; flex-shrink: 0;
+  }
+  .list-item .li-body { flex: 1; min-width: 0; }
+  .list-item .li-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .list-item .li-desc { font-size: 11.5px; color: var(--text-3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list-item .li-right { color: var(--text-3); font-size: 14px; flex-shrink: 0; }
+
+  /* ===== 开关 ===== */
+  .switch-item { display: flex; align-items: center; padding: 12px 16px; gap: 12px; }
+  .switch-item .t { flex: 1; font-size: 14px; font-weight: 600; }
+  .switch-item .d { font-size: 11.5px; color: var(--text-3); }
+  .switch {
+    width: 46px; height: 26px; border-radius: 13px;
+    background: #D6DAE3; position: relative; cursor: pointer;
+    transition: background .2s; flex-shrink: 0;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 3px; left: 3px;
+    width: 20px; height: 20px; border-radius: 50%; background: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,.2);
+    transition: left .2s;
+  }
+  .switch.on { background: var(--accent); }
+  .switch.on::after { left: 23px; }
+
+  /* ===== App选择页 ===== */
+  .searchbar {
+    margin: 0 16px 12px;
+    display: flex; align-items: center; gap: 8px;
+    background: var(--card);
+    border-radius: 12px;
+    padding: 0 12px;
+    height: 44px;
+    box-shadow: var(--shadow);
+  }
+  .searchbar .s-ico { color: var(--text-3); font-size: 15px; }
+  .searchbar input {
+    flex: 1; border: none; outline: none; background: transparent;
+    font-size: 14px; color: var(--text);
+  }
+  .searchbar input::placeholder { color: var(--text-3); }
+
+  .chips-row { display: flex; gap: 8px; padding: 4px 16px 0; overflow-x: auto; scrollbar-width: none; }
+  .chips-row::-webkit-scrollbar { display: none; }
+  .chip {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 6px 12px;
+    font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer;
+  }
+  .chip .x { font-size: 11px; opacity: .7; margin-left: 2px; }
+  .chip-add { background: var(--card); color: var(--text-3); box-shadow: inset 0 0 0 1.5px var(--border); }
+
+  .app-list { margin: 12px 16px 0; }
+  .app-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px;
+    background: var(--card); border-radius: 12px;
+    margin-bottom: 8px;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+  }
+  .app-row.selected { box-shadow: 0 0 0 1.5px var(--accent), var(--shadow); }
+  .app-row .a-ico {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0; color: #fff;
+  }
+  .app-row .a-body { flex: 1; min-width: 0; }
+  .app-row .a-name { font-size: 14px; font-weight: 600; }
+  .app-row .a-pkg { font-size: 11px; color: var(--text-3); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .app-row .a-check {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 2px solid #D6DAE3; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: transparent;
+  }
+  .app-row.selected .a-check { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .section-label {
+    font-size: 12px; font-weight: 700; color: var(--text-2);
+    margin: 14px 16px 8px; display: flex; align-items: center; gap: 6px;
+  }
+  .section-label::before { content: ""; width: 3px; height: 14px; border-radius: 2px; background: var(--accent); }
+
+  /* ===== 规则页 ===== */
+  .rule-card {
+    margin: 0 16px 10px;
+    background: var(--card);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 13px 14px;
+    cursor: pointer;
+  }
+  .rule-card .r-top { display: flex; align-items: center; gap: 8px; }
+  .rule-card .r-tag {
+    font-size: 13px; font-weight: 800; color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 8px; padding: 3px 8px;
+    font-family: "SF Mono", Consolas, monospace;
+  }
+  .rule-card .r-arrow { margin-left: auto; color: var(--text-3); font-size: 12px; }
+  .rule-card .r-body { margin-top: 8px; display: flex; align-items: center; gap: 8px; }
+  .rule-card .r-apps {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-2); flex: 1;
+  }
+  .mini-ico {
+    width: 20px; height: 20px; border-radius: 6px;
+    color: #fff; font-size: 10px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .rule-card .r-meta { font-size: 10.5px; color: var(--text-3); }
+
+  /* ===== 对话框 ===== */
+  .dialog-mask {
+    position: fixed; inset: 0;
+    background: rgba(15,18,30,.5);
+    backdrop-filter: blur(3px);
+    display: none; align-items: center; justify-content: center;
+    z-index: 100; padding: 24px;
+  }
+  .dialog-mask.show { display: flex; }
+  .dialog {
+    width: 100%; max-width: 340px;
+    background: #fff; border-radius: 20px;
+    box-shadow: var(--shadow-lg);
+    padding: 20px;
+    animation: pop .18s ease-out;
+  }
+  @keyframes pop { from { transform: scale(.92); opacity: 0; } }
+  .dialog h3 { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+  .field { margin-bottom: 12px; }
+  .field label { font-size: 11.5px; color: var(--text-3); font-weight: 600; display: block; margin-bottom: 5px; }
+  .field input {
+    width: 100%; height: 42px;
+    border: 1.5px solid var(--border); border-radius: 12px;
+    padding: 0 12px; font-size: 14px; outline: none; background: var(--bg);
+  }
+  .field input:focus { border-color: var(--accent); background: #fff; }
+  .dialog .dlg-btns { display: flex; gap: 10px; margin-top: 16px; }
+
+  /* ===== 右侧说明面板 ===== */
+  .notes {
+    width: 340px;
+    background: var(--card);
+    border-radius: 20px;
+    box-shadow: var(--shadow-lg);
+    padding: 24px;
+  }
+  .notes h2 { font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+  .notes h2 .n-ico { color: var(--accent); }
+  .notes .sub { color: var(--text-3); font-size: 12.5px; margin: 4px 0 18px; }
+  .notes h4 {
+    font-size: 13px; font-weight: 700; margin: 16px 0 8px; color: var(--accent);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .notes ul { list-style: none; }
+  .notes li {
+    font-size: 12.5px; color: var(--text-2); line-height: 1.7;
+    padding-left: 18px; position: relative; margin-bottom: 4px;
+  }
+  .notes li::before { content: "✦"; position: absolute; left: 0; color: var(--accent-2); font-size: 10px; top: 3px; }
+  .notes .tag {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 6px; padding: 1px 6px; font-size: 10.5px; font-weight: 700;
+    font-family: "SF Mono", Consolas, monospace;
+  }
+  .notes .before {
+    margin-top: 18px; background: var(--bg); border-radius: 12px; padding: 14px;
+    border: 1px dashed #D6DAE3;
+  }
+  .notes .before .b-t { font-size: 12px; font-weight: 700; margin-bottom: 8px; color: var(--text-2); }
+  .notes .before .b-row {
+    display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-3);
+    padding: 5px 0;
+  }
+  .notes .b-row .bar {
+    flex: 1; height: 6px; border-radius: 3px;
+    background: repeating-linear-gradient(90deg, #E5E7EF 0 14px, transparent 14px 20px);
+  }
+
+  .screen-switch { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .tab {
+    padding: 8px 14px; border-radius: 999px; border: none;
+    background: #fff; color: var(--text-2); font-size: 12.5px; font-weight: 600;
+    cursor: pointer; box-shadow: var(--shadow);
+  }
+  .tab.active { background: var(--accent); color: #fff; box-shadow: 0 4px 12px rgba(108,92,231,.35); }
+
+  .fade { animation: fade .22s ease-out; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } }
+  @media (max-width: 820px) { .notes { display: none; } }
+</style>
+</head>
+<body>
+
+<div class="stage">
+
+  <!-- ======= 手机 ======= -->
+  <div class="phone">
+    <div class="statusbar">
+      <span>9:41</span>
+      <span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>
+    </div>
+    <div class="appbar">
+      <div class="logo">✦</div>
+      <div class="titles">
+        <h1>SuperMi</h1>
+        <p>悬浮气泡 · 快捷打开</p>
+      </div>
+    </div>
+
+    <div class="screen">
+      <div class="content" id="content">
+
+        <!-- ======= 主页面 ======= -->
+        <div class="fade" id="screen-main">
+
+          <!-- 气泡位置卡片 -->
+          <div class="card">
+            <div class="card-header">
+              <span class="t"><span class="ico">◈</span>气泡位置</span>
+              <span class="sub">所见即所得</span>
+            </div>
+            <div class="preview-hint">
+              点击「显示预览」，气泡会<b>真实叠加在当前页面上方</b>展示应用后的位置，可拖动或按方向键微调。
+            </div>
+            <div class="step-row">
+              <span class="step-label">步长</span>
+              <div class="seg" id="stepSeg">
+                <button class="seg-btn" data-step="1" onclick="setStep(1)">1</button>
+                <button class="seg-btn active" data-step="5" onclick="setStep(5)">5</button>
+                <button class="seg-btn" data-step="10" onclick="setStep(10)">10</button>
+              </div>
+              <span class="step-unit">dp</span>
+              <button class="reset-btn" onclick="resetBubble()">重置</button>
+            </div>
+            <div class="pos-controls">
+              <div class="dpad">
+                <span></span>
+                <button onclick="moveBubble(0,-1)" title="上移">▲</button>
+                <span></span>
+                <button onclick="moveBubble(-1,0)" title="左移">◀</button>
+                <button class="step-sm" title="中心">●</button>
+                <button onclick="moveBubble(1,0)" title="右移">▶</button>
+                <span></span>
+                <button onclick="moveBubble(0,1)" title="下移">▼</button>
+                <span></span>
+              </div>
+              <div class="pos-readout">
+                <div class="val" id="posVal">Y: 30 &nbsp; X: 0</div>
+                <div class="lbl">当前偏移 (dp)</div>
+              </div>
+            </div>
+            <div class="row-btns">
+              <button class="btn btn-primary" id="btnShow" onclick="togglePreview()">▶ 显示预览</button>
+            </div>
+          </div>
+
+          <!-- 打开方式 -->
+          <div class="section-label">打开方式</div>
+          <div class="card">
+            <div class="list-item" onclick="openPicker('addr')">
+              <div class="li-ico" style="background:rgba(46,134,222,.14); color:#2E86DE;">📍</div>
+              <div class="li-body">
+                <div class="li-title">地址气泡</div>
+                <div class="li-desc" id="addrDesc">地图 App：高德地图, 百度地图</div>
+              </div>
+              <div class="li-right">›</div>
+            </div>
+            <div class="list-item" onclick="openPicker('url')">
+              <div class="li-ico" style="background:rgba(39,174,96,.14); color:#27AE60;">🌐</div>
+              <div class="li-body">
+                <div class="li-title">链接气泡</div>
+                <div class="li-desc" id="urlDesc">浏览器 App：Chrome, 夸克</div>
+              </div>
+              <div class="li-right">›</div>
+            </div>
+            <div class="list-item" onclick="openPicker('phone')">
+              <div class="li-ico" style="background:rgba(230,126,34,.14); color:#E67E22;">📞</div>
+              <div class="li-body">
+                <div class="li-title">号码气泡</div>
+                <div class="li-desc">未指定 → 使用系统拨号</div>
+              </div>
+              <div class="li-right">›</div>
+            </div>
+          </div>
+
+          <!-- 识别规则 -->
+          <div class="section-label">识别规则</div>
+          <div class="card">
+            <div class="list-item" onclick="go('platform')">
+              <div class="li-ico" style="background:rgba(108,92,231,.14); color:var(--accent);">🧩</div>
+              <div class="li-body">
+                <div class="li-title">平台识别规则</div>
+                <div class="li-desc">链接片段 / 关键字匹配平台</div>
+              </div>
+              <div class="li-right">›</div>
+            </div>
+            <div class="list-item" onclick="go('number')">
+              <div class="li-ico" style="background:rgba(52,152,219,.14); color:#3498DB;">🔢</div>
+              <div class="li-body">
+                <div class="li-title">号码识别规则</div>
+                <div class="li-desc">按开头 + 位数匹配号码</div>
+              </div>
+              <div class="li-right">›</div>
+            </div>
+          </div>
+
+          <!-- 调试开关 -->
+          <div class="section-label">其他</div>
+          <div class="card">
+            <div class="switch-item">
+              <div class="t" style="flex:1;">调试模式<span class="d" style="display:block;font-weight:400;margin-top:2px;">显示识别日志浮窗</span></div>
+              <div class="switch" id="swDebug" onclick="toggleSwitch(this)"></div>
+            </div>
+          </div>
+
+          <!-- 底部导航模拟 -->
+          <div style="height: 8px;"></div>
+        </div>
+
+        <!-- ======= App 选择页 ======= -->
+        <div class="fade" id="screen-picker" style="display:none;">
+          <div class="searchbar">
+            <span class="s-ico">🔍</span>
+            <input placeholder="搜索应用…" id="searchInput" oninput="filterApps(this.value)">
+            <span style="color:var(--text-3);font-size:11px;">含系统</span>
+            <div class="switch" id="swSystem" onclick="toggleSwitch(this)"></div>
+          </div>
+
+          <div class="section-label">最近选择 · 点击选择 / 长按删除</div>
+          <div class="chips-row">
+            <span class="chip">📍 高德地图<span class="x">×</span></span>
+            <span class="chip">📍 百度地图<span class="x">×</span></span>
+            <span class="chip-add">＋ 添加</span>
+          </div>
+
+          <div class="section-label" id="pickerTitle">选择应用（最多 3 个）</div>
+          <div class="app-list" id="appList"></div>
+        </div>
+
+        <!-- ======= 平台规则页 ======= -->
+        <div class="fade" id="screen-platform" style="display:none;">
+          <div class="searchbar" style="height:auto;align-items:flex-start;padding:12px;flex-direction:column;">
+            <div style="font-size:12px;color:var(--text-2);line-height:1.7;">
+              识别顺序：<b>①</b> 文本带符号关键字（【】/「」）优先　<b>②</b> 链接片段匹配　<b>③</b> 兜底系统解析
+            </div>
+          </div>
+          <div class="section-label">平台规则 · 点击编辑 / 长按删除</div>
+          <div id="platformList">
+            <div class="rule-card">
+              <div class="r-top">
+                <span class="r-tag">【闲鱼】</span>
+                <span class="r-body" style="margin:0;">
+                  <span class="mini-ico" style="background:#FF7B00;">闲</span>
+                  <span style="font-size:12px;color:var(--text-2);">→ 闲鱼</span>
+                </span>
+                <span class="r-arrow">›</span>
+              </div>
+              <div class="r-meta" style="margin-top:8px;color:var(--text-3);font-size:11px;">goofish.com · 2.taobao.com</div>
+            </div>
+            <div class="rule-card">
+              <div class="r-top">
+                <span class="r-tag">「百度网盘」</span>
+                <span class="r-body" style="margin:0;">
+                  <span class="mini-ico" style="background:#2E86DE;">百</span>
+                  <span style="font-size:12px;color:var(--text-2);">→ 百度网盘</span>
+                </span>
+                <span class="r-arrow">›</span>
+              </div>
+              <div class="r-meta" style="margin-top:8px;color:var(--text-3);font-size:11px;">pan.baidu.com</div>
+            </div>
+            <div class="rule-card">
+              <div class="r-top">
+                <span class="r-tag">(无关键字)</span>
+                <span class="r-body" style="margin:0;">
+                  <span class="mini-ico" style="background:#E74C3C;">淘</span>
+                  <span style="font-size:12px;color:var(--text-2);">→ 淘宝</span>
+                </span>
+                <span class="r-arrow">›</span>
+              </div>
+              <div class="r-meta" style="margin-top:8px;color:var(--text-3);font-size:11px;">m.tb.cn</div>
+            </div>
+          </div>
+          <div class="row-btns" style="padding:16px 16px 0;">
+            <button class="btn btn-primary" onclick="openRuleDialog('platform')">＋ 新增平台规则</button>
+          </div>
+        </div>
+
+        <!-- ======= 号码规则页 ======= -->
+        <div class="fade" id="screen-number" style="display:none;">
+          <div class="searchbar" style="height:auto;align-items:flex-start;padding:12px;flex-direction:column;">
+            <div style="font-size:12px;color:var(--text-2);line-height:1.7;">
+              在复制文本中按顺序查找 <b>「开头 + 位数」</b> 匹配的号码，命中即显示对应 App（最多 3 个）。手机号默认开头 1、11 位。
+            </div>
+          </div>
+          <div class="section-label">号码规则 · 点击编辑 / 长按删除</div>
+          <div id="numberList"></div>
+          <div class="row-btns" style="padding:16px 16px 0;">
+            <button class="btn btn-primary" onclick="openRuleDialog('number')">＋ 新增号码规则</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ======= 右侧说明 ======= -->
+  <div class="notes">
+    <h2><span class="n-ico">✦</span> 美化方案说明</h2>
+    <p class="sub">SuperMi 设置界面 · 前端还原预览（交互已可点）</p>
+
+    <h4>🎨 整体方向</h4>
+    <ul>
+      <li>Material 3 + 靛紫渐变主色（<span class="tag">#6C5CE7</span>），圆角卡片化</li>
+      <li>分组标题 + 阴影卡片，替代平铺按钮堆叠</li>
+      <li>全页面支持日间 / 夜间双主题</li>
+    </ul>
+
+    <h4>📐 主页面</h4>
+    <ul>
+      <li>「显示预览」将气泡<b>真实叠加在当前页面上方</b>，所见即所得</li>
+      <li>气泡可<b>直接拖拽</b>定位，方向键支持<b>步长 1/5/10 dp</b>微调，读数实时更新</li>
+      <li>App 选择改为带图标的列表项（地址/链接/号码三类）</li>
+      <li>规则入口加图标 + 说明文字，层次清晰</li>
+    </ul>
+
+    <h4>📱 App 选择页</h4>
+    <ul>
+      <li>圆角搜索栏，包含系统应用改为<b>滑动开关</b></li>
+      <li>最近选择 chips，圆角应用行 + 多选勾选态</li>
+      <li>推荐应用排序（地图/浏览器关键词优先）</li>
+    </ul>
+
+    <h4>🧩 规则页</h4>
+    <ul>
+      <li>规则改为卡片式：关键字标签 + 打开 App + 链接元信息</li>
+      <li>号码规则显示前缀 / 位数标签，快递色块增强辨识</li>
+    </ul>
+
+    <h4>⚠️ 之前的不足</h4>
+    <div class="before">
+      <div class="b-t">旧版对比</div>
+      <div class="b-row"><span>默认 Button 平铺</span><span class="bar"></span></div>
+      <div class="b-row"><span>无主题配色</span><span class="bar"></span></div>
+      <div class="b-row"><span>无分组无卡片</span><span class="bar"></span></div>
+      <div class="b-row"><span>纯文字无图标</span><span class="bar"></span></div>
+    </div>
+
+    <h4>🚀 待确认</h4>
+    <ul>
+      <li>主色：靛紫 vs 蓝色 vs 绿色，选一个</li>
+      <li>方向键保留还是改用滑杆？</li>
+      <li>确认后我在 XML / Compose 里落地</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ======= 真实悬浮气泡浮层 ======= -->
+<div class="float-bubble" id="floatBubble">
+  <span class="fb-ico">📍</span>
+  <span class="fb-label">打开</span>
+  <span class="fb-badge">3</span>
+</div>
+
+<!-- ======= 对话框 ======= -->
+<div class="dialog-mask" id="dialogMask">
+  <div class="dialog">
+    <h3 id="dlgTitle">新增规则</h3>
+    <div class="field">
+      <label id="dlgField1Label">关键字（建议带【】/「」）</label>
+      <input id="dlgField1" placeholder="如：【闲鱼】">
+    </div>
+    <div class="field" id="dlgField2Wrap">
+      <label id="dlgField2Label">链接匹配（逗号分隔）</label>
+      <input id="dlgField2" placeholder="如：goofish.com">
+    </div>
+    <div class="field">
+      <label>打开 App（最多 3 个）</label>
+      <button class="btn btn-outline" style="width:100%;height:40px;" onclick="toast('已打开 App 选择器')">选择应用…</button>
+    </div>
+    <div class="dlg-btns">
+      <button class="btn btn-ghost" onclick="closeDialog()">取消</button>
+      <button class="btn btn-primary" onclick="closeDialog();toast('规则已保存')">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== 屏幕切换 =====
+  const screens = {
+    main: "screen-main", picker: "screen-picker",
+    platform: "screen-platform", number: "screen-number"
+  };
+  let pickerType = "addr";
+  function show(id) {
+    Object.values(screens).forEach(s => document.getElementById(s).style.display = "none");
+    document.getElementById(screens[id]).style.display = "";
+    document.getElementById("content").scrollTop = 0;
+  }
+  function go(id) { show(id); }
+  function openPicker(type) {
+    pickerType = type;
+    const cfg = {
+      addr: { title: "选择地图 App（最多 3 个）", apps: [["📍","高德地图","com.autonavi.amap","#2E86DE"],["📍","百度地图","com.baidu.BaiduMap","#E67E22"],["🌐","Google Maps","com.google.android.apps.maps","#27AE60"],["📦","滴滴出行","com.sdu.didi.psnger","#8E7CF0"]] },
+      url: { title: "选择浏览器 App（最多 3 个）", apps: [["🌐","Chrome","com.android.chrome","#4285F4"],["🌐","夸克浏览器","com.quark.browser","#2E86DE"],["🦊","Firefox","org.mozilla.firefox","#E67E22"],["🌐","Edge","com.microsoft.emmx","#27AE60"]] },
+      phone: { title: "选择号码 App（最多 3 个）", apps: [["📞","系统拨号","com.android.dialer","#3498DB"],["📞","联系人","com.android.contacts","#9B59B6"],["📦","菜鸟裹裹","com.cainiao.wireless","#FF7B00"],["📦","顺丰速运","com.sf.activity","#E74C3C"]] }
+    }[type];
+    document.getElementById("pickerTitle").textContent = cfg.title;
+    document.getElementById("appList").innerHTML = cfg.apps.map((a,i) => `
+      <div class="app-row ${i<2?'selected':''}" onclick="this.classList.toggle('selected')">
+        <div class="a-ico" style="background:${a[3]}">${a[0]}</div>
+        <div class="a-body">
+          <div class="a-name">${a[1]}</div>
+          <div class="a-pkg">${a[2]}</div>
+        </div>
+        <div class="a-check">✓</div>
+      </div>`).join("");
+    show("picker");
+  }
+  function filterApps(q) {
+    document.querySelectorAll(".app-row").forEach(r => {
+      r.style.display = r.textContent.toLowerCase().includes(q.toLowerCase()) ? "" : "none";
+    });
+  }
+
+  // ===== 号码规则 =====
+  const numRules = [
+    { tag: "1", lens: "11", meta: "默认手机号", apps: [["📞", "系统拨号", "var(--accent)"]] },
+    { tag: "YT", lens: "15", meta: "韵达单号", apps: [["📦", "菜鸟裹裹", "#FF7B00"]] },
+    { tag: "(任意)", lens: "7,8,9", meta: "连续输入 → 显示为区间 7~9 位", apps: [["📦", "菜鸟裹裹", "#E67E22"]] },
+    { tag: "9", lens: "7,9", meta: "离散输入 → 7 位或 9 位", apps: [["📦", "顺丰速运", "#E74C3C"]] }
+  ];
+  function fmtLens(lensStr) {
+    if (!lensStr || !lensStr.trim()) return "任意长度";
+    const arr = lensStr.split(/[,，]/).map(Number).sort((a, b) => a - b).filter(Boolean);
+    const consec = arr.every((v, i) => i === 0 || v === arr[i - 1] + 1);
+    if (consec) return (arr.length === 1 ? arr[0] : arr[0] + "~" + arr[arr.length - 1]) + " 位";
+    return arr.join("/") + " 位";
+  }
+  function renderNumRules() {
+    document.getElementById("numberList").innerHTML = numRules.map(r => `
+      <div class="rule-card" onclick="openRuleDialog('number')">
+        <div class="r-top">
+          <span class="r-tag">${r.tag}</span>
+          <span class="r-tag" style="background:rgba(108,92,231,.10);color:var(--accent);">${fmtLens(r.lens)}</span>
+          <span class="r-body" style="margin:0;flex:1;gap:8px;">
+            ${r.apps.map(a => `<span class="mini-ico" style="background:${a[2]};">${a[0]}</span>`).join("")}
+            <span style="font-size:12px;color:var(--text-2);">→ ${r.apps.map(a => a[1]).join(",")}</span>
+          </span>
+          <span class="r-arrow">›</span>
+        </div>
+        <div class="r-meta" style="margin-top:8px;color:var(--text-3);font-size:11px;">${r.meta}</div>
+      </div>`).join("");
+  }
+
+  // ===== 真实悬浮气泡 =====
+  const floatBubble = document.getElementById("floatBubble");
+  let offY = 30, offX = 0;
+  let step = 5;
+  function setStep(v) {
+    step = v;
+    document.querySelectorAll(".seg-btn").forEach(b =>
+      b.classList.toggle("active", Number(b.dataset.step) === v));
+  }
+  function setFloating() {
+    floatBubble.style.top = offY + "px";
+    floatBubble.style.left = "calc(50% + " + offX + "px)";
+    document.getElementById("posVal").innerHTML = "Y: " + offY + " &nbsp; X: " + offX;
+  }
+  function togglePreview() {
+    if (floatBubble.style.display === "none" || floatBubble.style.display === "") {
+      floatBubble.style.display = "flex";
+      setFloating();
+      document.getElementById("btnShow").textContent = "隐藏";
+      toast("气泡已叠加显示，可拖动或按方向键微调");
+    } else {
+      floatBubble.style.display = "none";
+      document.getElementById("btnShow").textContent = "▶ 显示预览";
+      toast("气泡已隐藏");
+    }
+  }
+  function moveBubble(dx, dy) {
+    offY = Math.max(0, Math.min(600, offY + dy * step));
+    offX = Math.max(-400, Math.min(400, offX + dx * step));
+    setFloating();
+  }
+  function resetBubble() { offY = 30; offX = 0; setFloating(); }
+
+  let fDrag = false, fStartX, fStartY, fOrigX, fOrigY;
+  floatBubble.addEventListener("pointerdown", e => {
+    fDrag = true; fStartX = e.clientX; fStartY = e.clientY;
+    fOrigX = offX; fOrigY = offY;
+    floatBubble.classList.add("dragging");
+    floatBubble.setPointerCapture(e.pointerId);
+  });
+  floatBubble.addEventListener("pointermove", e => {
+    if (!fDrag) return;
+    offX = Math.max(-400, Math.min(400, fOrigX + (e.clientX - fStartX)));
+    offY = Math.max(0, Math.min(600, fOrigY + (e.clientY - fStartY)));
+    setFloating();
+  });
+  floatBubble.addEventListener("pointerup", () => {
+    fDrag = false;
+    floatBubble.classList.remove("dragging");
+  });
+
+  // ===== 开关 =====
+  function toggleSwitch(el) {
+    el.classList.toggle("on");
+    if (el.id === "swDebug") toast("调试模式：" + (el.classList.contains("on") ? "已开启" : "已关闭"));
+  }
+
+  // ===== 对话框 =====
+  function openRuleDialog(type) {
+    const isNum = type === "number";
+    document.getElementById("dlgTitle").textContent = isNum ? "新增号码规则" : "新增平台规则";
+    const f1 = document.getElementById("dlgField1");
+    const f2 = document.getElementById("dlgField2");
+    const l1 = document.getElementById("dlgField1Label");
+    const l2 = document.getElementById("dlgField2Label");
+    if (isNum) {
+      l1.textContent = "开头（留空=任意，多开头逗号分隔）";
+      f1.placeholder = "如：SF / 1 / YT";
+      l2.textContent = "位数（固定总长，逗号分隔）";
+      f2.placeholder = "如：7,8,9 → 7~9位；7,9 → 7位或9位";
+    } else {
+      l1.textContent = "关键字（建议带【】/「」）";
+      f1.placeholder = "如：【闲鱼】";
+      l2.textContent = "链接匹配（逗号分隔）";
+      f2.placeholder = "如：goofish.com";
+    }
+    document.getElementById("dialogMask").classList.add("show");
+  }
+  function closeDialog() { document.getElementById("dialogMask").classList.remove("show"); }
+  document.getElementById("dialogMask").addEventListener("click", e => {
+    if (e.target.id === "dialogMask") closeDialog();
+  });
+
+  renderNumRules();
+
+  // ===== Toast =====
+  let toastEl;
+  function toast(msg) {
+    if (!toastEl) {
+      toastEl = document.createElement("div");
+      toastEl.style.cssText = "position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#1F2430;color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;z-index:999;box-shadow:0 8px 24px rgba(0,0,0,.25);transition:opacity .3s;";
+      document.body.appendChild(toastEl);
+    }
+    toastEl.textContent = msg;
+    toastEl.style.opacity = "1";
+    clearTimeout(toastEl._t);
+    toastEl._t = setTimeout(() => toastEl.style.opacity = "0", 1600);
+  }
+</script>
+</body>
+</html>

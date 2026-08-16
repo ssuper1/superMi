@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Brand -->
+    <color name="accent">#FF2E86DE</color>
+    <color name="accent_2">#FF56A6F5</color>
+    <color name="accent_deep">#FF1B5FB8</color>
+    <color name="accent_soft">#0A2E86DE</color>
+
+    <!-- 气泡位置板块：浅蓝底 + 深蓝字 -->
+    <color name="blue_light">#FFE0EDFC</color>
+    <color name="blue_text">#FF0F5BB5</color>
+
+    <!-- Surfaces -->
+    <color name="page_bg">#FFF4F5FA</color>
+    <color name="card_bg">#FFFFFFFF</color>
+    <color name="seg_bg">#FFF0F2F8</color>
+
+    <!-- Text -->
+    <color name="text_primary">#FF1F2430</color>
+    <color name="text_secondary">#FF6B7280</color>
+    <color name="text_tertiary">#FF9CA3AF</color>
+    <color name="divider">#FFEEF0F6</color>
+
+    <!-- Misc -->
+    <color name="switch_track_off">#FFD6DAE3</color>
+    <color name="ok">#FF27AE60</color>
+</resources>

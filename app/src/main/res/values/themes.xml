@@ -1,0 +1,10 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Base.Theme.SuperMi" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorPrimaryContainer">@color/accent_soft</item>
+        <item name="android:windowBackground">@color/page_bg</item>
+    </style>
+
+    <style name="Theme.SuperMi" parent="Base.Theme.SuperMi" />
+</resources>

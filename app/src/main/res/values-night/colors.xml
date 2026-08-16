@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="accent">#FF4A9DEA</color>
+    <color name="accent_2">#FF7FB6F5</color>
+    <color name="accent_deep">#FF2E86DE</color>
+    <color name="accent_soft">#1A4A9DEA</color>
+
+    <!-- 气泡位置板块：浅蓝底 + 深蓝字（夜间） -->
+    <color name="blue_light">#FF2B5C8A</color>
+    <color name="blue_text">#FF82B4F0</color>
+
+    <color name="page_bg">#FF0F1016</color>
+    <color name="card_bg">#FF1C1E2A</color>
+    <color name="seg_bg">#FF262A38</color>
+
+    <color name="text_primary">#FFECEFF4</color>
+    <color name="text_secondary">#FF9AA3B2</color>
+    <color name="text_tertiary">#FF6B7280</color>
+    <color name="divider">#FF2A2E3D</color>
+
+    <color name="switch_track_off">#FF3A3E4D</color>
+    <color name="ok">#FF2ECC71</color>
+</resources>
