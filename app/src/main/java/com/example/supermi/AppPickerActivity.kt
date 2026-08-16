@@ -105,7 +105,7 @@ class AppPickerActivity : AppCompatActivity() {
             confirm.setOnClickListener { confirmSelection() }
         }
 
-        findViewById<Button>(R.id.btn_picker_refresh).setOnClickListener {
+        findViewById<View>(R.id.btn_picker_refresh).setOnClickListener {
             AppListCache.invalidate(this)
             reloadApps()
         }

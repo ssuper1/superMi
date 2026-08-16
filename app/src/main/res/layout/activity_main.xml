@@ -76,21 +76,21 @@
                 android:textSize="11sp" />
         </LinearLayout>
 
-        <Button
+        <TextView
             android:id="@+id/btn_refresh_apps"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:background="@drawable/bg_btn_header"
-            app:backgroundTint="@null"
-            android:includeFontPadding="false"
-            android:minHeight="0dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
             android:minWidth="0dp"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:paddingTop="7dp"
-            android:paddingBottom="7dp"
-            android:stateListAnimator="@null"
-            android:text="↻刷新app"
+            android:minHeight="0dp"
+            android:paddingStart="11dp"
+            android:paddingEnd="11dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:text="↻刷新列表"
             android:textColor="@color/white"
             android:textSize="12sp" />
     </LinearLayout>
