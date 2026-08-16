@@ -139,13 +139,17 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.row_export).setOnClickListener { exportConfig() }
         findViewById<View>(R.id.row_import).setOnClickListener { importLauncher.launch(arrayOf("text/plain", "application/octet-stream")) }
 
-        findViewById<Button>(R.id.btn_refresh_apps).setOnClickListener {
+        findViewById<View>(R.id.btn_refresh_apps).setOnClickListener {
             Toast.makeText(this, "正在后台刷新应用列表…", Toast.LENGTH_SHORT).show()
             AppListCache.refreshAsync(applicationContext) {
                 runOnUiThread {
                     Toast.makeText(this, "应用列表已刷新", Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+
+        findViewById<View>(R.id.header_logo).setOnClickListener {
+            openExternal("https://github.com/ssuper1/superMi")
         }
 
         findViewById<Button>(R.id.btn_len_50).setOnClickListener { setMaxLen(50) }
@@ -178,6 +182,13 @@ class MainActivity : AppCompatActivity() {
         updateOffsetLabel()
         updateAppLabels()
         ensureOverlayPermission()
+    }
+
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        previewView = null
+        previewParams = null
+        findViewById<Button>(R.id.btn_show).text = "▶ 显示预览"
     }
 
     private fun gapListener(index: Int) = object : android.widget.SeekBar.OnSeekBarChangeListener {
@@ -740,6 +751,14 @@ class MainActivity : AppCompatActivity() {
         null
     }
 
+    private fun openExternal(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (_: Throwable) {
+            Toast.makeText(this, "无法打开链接", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun buildPreviewRow(): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -830,11 +849,13 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         dismissPreview()
+        findViewById<Button>(R.id.btn_show).text = "▶ 显示预览"
     }
 
     override fun onDestroy() {
         super.onDestroy()
         dismissPreview()
+        findViewById<Button>(R.id.btn_show).text = "▶ 显示预览"
     }
 
     private fun dp(value: Int): Int =
