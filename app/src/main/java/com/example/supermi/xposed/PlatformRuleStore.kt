@@ -1,6 +1,7 @@
 ﻿package com.example.supermi.xposed
 
 import android.content.Context
+import de.robv.android.xposed.XposedBridge
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -108,12 +109,14 @@ object PlatformRuleStore {
     fun match(ctx: Context?, text: String): PlatformMatch? {
         for (r in rules(ctx)) {
             if (keywordMatches(r, text)) {
+                XposedBridge.log("SuperMi: PLAT keyword matched -> ${r.app} kw='${r.keyword}'")
                 return PlatformMatch(r.app, r.apps, r.deepLink)
             }
         }
         for (r in rules(ctx)) {
             for (l in r.links) {
                 if (l.isNotEmpty() && text.contains(l)) {
+                    XposedBridge.log("SuperMi: PLAT link matched -> ${r.app} link='$l' text='$text'")
                     return PlatformMatch(r.app, r.apps, r.deepLink)
                 }
             }

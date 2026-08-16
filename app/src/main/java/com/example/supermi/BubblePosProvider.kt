@@ -28,6 +28,7 @@ class BubblePosProvider : ContentProvider() {
         const val KEY_PREVIEW_ICONS = "preview_icons"
         const val KEY_GAP12 = "gap12"
         const val KEY_GAP23 = "gap23"
+        const val KEY_ICON_SIZE = "icon_size"
         const val CONFIG_FILE = "supermi_config"
 
         @Volatile
@@ -61,6 +62,9 @@ class BubblePosProvider : ContentProvider() {
         var maxLen: Int = 150
 
         @Volatile
+        var iconSize: Int = BubblePrefs.DEFAULT_ICON_SIZE
+
+        @Volatile
         var debug: Boolean = false
     }
 
@@ -88,6 +92,7 @@ class BubblePosProvider : ContentProvider() {
                     KEY_DEFAULT_LEN_MIN -> defaultLenMin = v.toIntOrNull() ?: defaultLenMin
                     KEY_DEFAULT_LEN_MAX -> defaultLenMax = v.toIntOrNull() ?: defaultLenMax
                     KEY_MAX_LEN -> maxLen = v.toIntOrNull() ?: maxLen
+                    KEY_ICON_SIZE -> iconSize = v.toIntOrNull() ?: iconSize
                     KEY_DEBUG -> debug = v == "1"
                 }
             }
@@ -108,6 +113,7 @@ class BubblePosProvider : ContentProvider() {
             putInt(KEY_DEFAULT_LEN_MIN, defaultLenMin)
             putInt(KEY_DEFAULT_LEN_MAX, defaultLenMax)
             putInt(KEY_MAX_LEN, maxLen)
+            putInt(KEY_ICON_SIZE, iconSize)
             putBoolean(KEY_DEBUG, debug)
         }
     }

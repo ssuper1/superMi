@@ -47,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     private var previewCount: Int = 1
     private var gap12: Int = 6
     private var gap23: Int = 6
+    private var iconSize: Int = BubblePrefs.DEFAULT_ICON_SIZE
     private var pendingType: String = BubblePosProvider.KEY_ADDR_APP
 
     private val pickerLauncher = registerForActivityResult(
@@ -126,6 +127,10 @@ class MainActivity : AppCompatActivity() {
         updatePreviewSeg()
         setupGapSeekBar(R.id.seek_gap12, R.id.tv_gap12, gap12) { gap12 = it }
         setupGapSeekBar(R.id.seek_gap23, R.id.tv_gap23, gap23) { gap23 = it }
+        setupIconSeekBar(R.id.seek_icon, R.id.tv_icon, iconSize) { iconSize = it }
+        findViewById<Button>(R.id.btn_reset_icon).setOnClickListener {
+            setIconSize(BubblePrefs.DEFAULT_ICON_SIZE)
+        }
         findViewById<Button>(R.id.btn_reset_gap12).setOnClickListener {
             setGap(1, 6)
         }
@@ -170,6 +175,42 @@ class MainActivity : AppCompatActivity() {
         val tvId = if (index == 1) R.id.tv_gap12 else R.id.tv_gap23
         findViewById<android.widget.SeekBar>(seekId).progress = v
         findViewById<TextView>(tvId).text = "$v"
+        saveConfig()
+        refreshPreview()
+    }
+
+    private fun setupIconSeekBar(
+        seekId: Int,
+        tvId: Int,
+        initial: Int,
+        update: (Int) -> Unit
+    ) {
+        val seek = findViewById<android.widget.SeekBar>(seekId)
+        val tv = findViewById<TextView>(tvId)
+        seek.max = BubblePrefs.ICON_SIZE_MAX - BubblePrefs.ICON_SIZE_MIN
+        seek.progress = (initial - BubblePrefs.ICON_SIZE_MIN).coerceIn(0, seek.max)
+        tv.text = "$initial"
+        seek.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                if (!fromUser) return
+                val v = (progress + BubblePrefs.ICON_SIZE_MIN).coerceIn(BubblePrefs.ICON_SIZE_MIN, BubblePrefs.ICON_SIZE_MAX)
+                tv.text = "$v"
+                update(v)
+                saveConfig()
+                refreshPreview()
+            }
+
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+        })
+    }
+
+    private fun setIconSize(value: Int) {
+        val v = value.coerceIn(BubblePrefs.ICON_SIZE_MIN, BubblePrefs.ICON_SIZE_MAX)
+        iconSize = v
+        findViewById<android.widget.SeekBar>(R.id.seek_icon).progress = v - BubblePrefs.ICON_SIZE_MIN
+        findViewById<TextView>(R.id.tv_icon).text = "$v"
         saveConfig()
         refreshPreview()
     }
@@ -398,6 +439,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadConfig() {
         val m = AppConfig.read(this)
+        android.util.Log.i(
+            "SuperMiApp",
+            "loadConfig map=${m.size} y='${m["y"]}' addr='${m["addr_app"]}' url='${m["url_app"]}'"
+        )
         if (m.isEmpty()) {
             try {
                 val lines = File(filesDir, "supermi_pos").readLines()
@@ -419,6 +464,8 @@ class MainActivity : AppCompatActivity() {
             previewCount = m[BubblePosProvider.KEY_PREVIEW_ICONS]?.toIntOrNull()?.coerceIn(1, 3) ?: previewCount
             gap12 = m[BubblePosProvider.KEY_GAP12]?.toIntOrNull()?.coerceIn(0, 50) ?: gap12
             gap23 = m[BubblePosProvider.KEY_GAP23]?.toIntOrNull()?.coerceIn(0, 50) ?: gap23
+            iconSize = m[BubblePosProvider.KEY_ICON_SIZE]?.toIntOrNull()
+                ?.coerceIn(BubblePrefs.ICON_SIZE_MIN, BubblePrefs.ICON_SIZE_MAX) ?: iconSize
             BubblePosProvider.platformRulesJson =
                 m[PlatformRuleStore.KEY_PLATFORM_RULES] ?: PlatformRuleStore.toJson(PlatformRuleStore.DEFAULT_RULES)
         }
@@ -433,6 +480,7 @@ class MainActivity : AppCompatActivity() {
         BubblePosProvider.phoneApp = phoneAppPkg
         BubblePosProvider.debug = debugEnabled
         BubblePosProvider.maxLen = maxLen
+        BubblePosProvider.iconSize = iconSize
     }
 
     private fun saveConfig() {
@@ -448,6 +496,7 @@ class MainActivity : AppCompatActivity() {
         m[BubblePosProvider.KEY_PREVIEW_ICONS] = "$previewCount"
         m[BubblePosProvider.KEY_GAP12] = "$gap12"
         m[BubblePosProvider.KEY_GAP23] = "$gap23"
+        m[BubblePosProvider.KEY_ICON_SIZE] = "$iconSize"
         if (!m.containsKey(PlatformRuleStore.KEY_PLATFORM_RULES)) {
             m[PlatformRuleStore.KEY_PLATFORM_RULES] = PlatformRuleStore.toJson(PlatformRuleStore.DEFAULT_RULES)
         }
@@ -470,8 +519,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         val icons = previewIcons()
+        val isz = iconSize.coerceIn(BubblePrefs.ICON_SIZE_MIN, BubblePrefs.ICON_SIZE_MAX)
+        val gap = (isz / 8).coerceAtLeast(2)
+        val padH = (isz / 3).coerceAtLeast(6)
+        val padV = (isz / 6).coerceAtLeast(3)
+        val corner = (isz * 2 / 3).coerceAtLeast(10)
+        row.setPadding(dp(padH), dp(padV), dp(padH), dp(padV))
+        (row.background as? GradientDrawable)?.cornerRadius = dp(corner).toFloat()
         for ((index, icon) in icons.withIndex()) {
-            val lp = LinearLayout.LayoutParams(dp(24), dp(24))
+            val lp = LinearLayout.LayoutParams(dp(isz), dp(isz))
             lp.marginStart = if (index == 0) dp(3) else dp(0)
             lp.marginEnd = when (index) {
                 0 -> if (icons.size > 1) dp(gap12) else dp(3)
@@ -479,7 +535,7 @@ class MainActivity : AppCompatActivity() {
                 else -> dp(3)
             }
             row.addView(ImageView(this).apply {
-                setImageDrawable(IconUtil.rounded(icon, dp(24), dp(6).toFloat(), resources))
+                setImageDrawable(IconUtil.rounded(icon, dp(isz), dp(isz / 4).toFloat(), resources))
                 layoutParams = lp
             })
         }

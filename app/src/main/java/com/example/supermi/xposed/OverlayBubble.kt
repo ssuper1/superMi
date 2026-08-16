@@ -264,25 +264,31 @@ object OverlayBubble {
         val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         windowManager = wm
 
+        val iconSize = BubblePrefs.iconSizeDp(ctx)
+        val gap = (iconSize / 8).coerceAtLeast(2)
+        val padH = (iconSize / 3).coerceAtLeast(6)
+        val padV = (iconSize / 6).coerceAtLeast(3)
+        val corner = (iconSize * 2 / 3).coerceAtLeast(10)
+
         val row = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), dp(4), dp(8), dp(4))
+            setPadding(dp(padH), dp(padV), dp(padH), dp(padV))
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 setColor(Color.parseColor("#D93C3C3C"))
-                cornerRadius = dp(16).toFloat()
+                cornerRadius = dp(corner).toFloat()
             }
         }
 
         for (target in targets) {
-            val lp = LinearLayout.LayoutParams(dp(24), dp(24))
-            lp.marginStart = dp(3)
-            lp.marginEnd = dp(3)
+            val lp = LinearLayout.LayoutParams(dp(iconSize), dp(iconSize))
+            lp.marginStart = dp(gap)
+            lp.marginEnd = dp(gap)
             row.addView(ImageView(ctx).apply {
                 setImageDrawable(
                     com.example.supermi.IconUtil.rounded(
-                        target.icon, dp(24), dp(6).toFloat(), ctx.resources
+                        target.icon, dp(iconSize), dp(iconSize / 4).toFloat(), ctx.resources
                     )
                 )
                 layoutParams = lp

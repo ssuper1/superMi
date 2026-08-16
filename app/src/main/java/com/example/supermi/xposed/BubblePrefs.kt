@@ -67,6 +67,17 @@ object BubblePrefs {
 
     const val DEFAULT_LEN_MIN = 11
     const val DEFAULT_LEN_MAX = 18
+    const val DEFAULT_ICON_SIZE = 24
+    const val ICON_SIZE_MIN = 16
+    const val ICON_SIZE_MAX = 48
+
+    fun iconSizeDp(ctx: Context?): Int {
+        val v = config(ctx)?.getInt("icon_size") ?: Settings.System.getInt(
+            ctx?.contentResolver ?: return DEFAULT_ICON_SIZE,
+            "supermi_icon_size", DEFAULT_ICON_SIZE
+        )
+        return v.coerceIn(ICON_SIZE_MIN, ICON_SIZE_MAX)
+    }
 
     fun maxLen(ctx: Context?): Int {
         config(ctx)?.getInt("max_len")?.takeIf { it > 0 }?.let { return it }
@@ -134,6 +145,7 @@ object BubblePrefs {
             Settings.System.putString(cr, KEY_NUM_RULES, b.getString(NumberRuleStore.KEY_NUMBER_RULES))
             Settings.System.putInt(cr, "supermi_num_default_min", b.getInt("num_default_min", DEFAULT_LEN_MIN))
             Settings.System.putInt(cr, "supermi_num_default_max", b.getInt("num_default_max", DEFAULT_LEN_MAX))
+            Settings.System.putInt(cr, "supermi_icon_size", b.getInt("icon_size", DEFAULT_ICON_SIZE))
             Settings.System.putInt(cr, KEY_MAX_LEN, b.getInt("max_len", DEFAULT_MAX_LEN))
             Settings.System.putInt(cr, KEY_DEBUG, if (b.getBoolean("debug")) 1 else 0)
         } catch (_: Throwable) {
@@ -152,6 +164,7 @@ object BubblePrefs {
             putString(NumberRuleStore.KEY_NUMBER_RULES, Settings.System.getString(cr, KEY_NUM_RULES))
             putInt("num_default_min", Settings.System.getInt(cr, "supermi_num_default_min", DEFAULT_LEN_MIN))
             putInt("num_default_max", Settings.System.getInt(cr, "supermi_num_default_max", DEFAULT_LEN_MAX))
+            putInt("icon_size", Settings.System.getInt(cr, "supermi_icon_size", DEFAULT_ICON_SIZE))
             putInt("max_len", Settings.System.getInt(cr, KEY_MAX_LEN, DEFAULT_MAX_LEN))
             putBoolean("debug", Settings.System.getInt(cr, KEY_DEBUG, 0) == 1)
         }

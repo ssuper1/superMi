@@ -97,18 +97,23 @@ class PlatformRulesActivity : AppCompatActivity() {
 
     private fun setupTooltip() {
         val tv = findViewById<TextView>(R.id.tv_usage)
-        val full = "1.【】关键字：复制的内容里常带「【平台名】」，规则里把平台名填在【】中即可匹配，能模糊匹配变体。\n" +
+        val full = "1.关键字：强烈建议仅将如“【抖音】”（带有“【】”或“「」”符号）作为关键字，而非纯文本如“抖音”作为关键字，否则极易误判。支持模糊匹配。\n" +
             "2.深链打开：勾选=点击直接跳到链接对应页面（部分app不支持，勾选会导致无法点击气泡无响应）；不勾=仅打开该App，由App用剪贴板口令自己识别。\n" +
             "3.匹配优先级：① 带符号关键字 ② 链接片段 ③ 系统解析。"
-        val redText = "部分app不支持，勾选会导致无法点击气泡无响应"
+        val redTexts = listOf(
+            "强烈建议仅将如“【抖音】”（带有“【】”或“「」”符号）作为关键字",
+            "部分app不支持，勾选会导致无法点击气泡无响应"
+        )
         val ss = android.text.SpannableString(full)
-        val start = full.indexOf(redText)
-        if (start >= 0) {
-            ss.setSpan(
-                android.text.style.ForegroundColorSpan(Color.RED),
-                start, start + redText.length,
-                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-            )
+        for (red in redTexts) {
+            val start = full.indexOf(red)
+            if (start >= 0) {
+                ss.setSpan(
+                    android.text.style.ForegroundColorSpan(Color.RED),
+                    start, start + red.length,
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
         }
         tv.text = ss
 
