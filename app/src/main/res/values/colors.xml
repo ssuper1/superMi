@@ -11,6 +11,7 @@
 
     <!-- 气泡位置板块：浅蓝底 + 深蓝字 -->
     <color name="blue_light">#FFE0EDFC</color>
+    <color name="blue_mid">#FFC9E2FA</color>
     <color name="blue_text">#FF0F5BB5</color>
 
     <!-- Surfaces -->

@@ -16,6 +16,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.example.supermi.xposed.NumberRule
 import com.example.supermi.xposed.NumberRuleStore
 
@@ -43,6 +45,8 @@ class NumberRulesActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_number_rules)
 
+        applySystemBarsInsets()
+
         loadRules()
 
         val list = findViewById<ListView>(R.id.list_rules)
@@ -66,6 +70,47 @@ class NumberRulesActivity : AppCompatActivity() {
             true
         }
         findViewById<Button>(R.id.btn_add).setOnClickListener { showEditDialog(-1) }
+        loadDefaultLen()
+    }
+
+    private fun loadDefaultLen() {
+        val m = AppConfig.read(this)
+        findViewById<EditText>(R.id.et_default_min).setText(m["num_default_min"] ?: "11")
+        findViewById<EditText>(R.id.et_default_max).setText(m["num_default_max"] ?: "18")
+    }
+
+    private fun saveDefaultLen() {
+        val min = findViewById<EditText>(R.id.et_default_min).text.toString().toIntOrNull() ?: 11
+        val max = findViewById<EditText>(R.id.et_default_max).text.toString().toIntOrNull() ?: 18
+        val m = AppConfig.read(this)
+        m["num_default_min"] = "$min"
+        m["num_default_max"] = "$max"
+        AppConfig.write(this, m)
+        BubblePosProvider.defaultLenMin = min
+        BubblePosProvider.defaultLenMax = max
+    }
+
+    override fun onPause() {
+        super.onPause()
+        saveDefaultLen()
+    }
+
+    private fun applySystemBarsInsets() {
+        val root = findViewById<View>(R.id.root)
+        val baseLeft = root.paddingLeft
+        val baseTop = root.paddingTop
+        val baseRight = root.paddingRight
+        val baseBottom = root.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(
+                baseLeft + bars.left,
+                baseTop + bars.top,
+                baseRight + bars.right,
+                baseBottom + bars.bottom
+            )
+            insets
+        }
     }
 
     private fun loadRules() {
@@ -83,7 +128,10 @@ class NumberRulesActivity : AppCompatActivity() {
     }
 
     private fun fmtLens(r: NumberRule): String {
-        if (r.lengths.isEmpty()) return "任意长度"
+        if (r.lengths.isEmpty()) {
+            val m = AppConfig.read(this)
+            return "默认长度(${m["num_default_min"] ?: "11"}-${m["num_default_max"] ?: "18"} 位)"
+        }
         val sorted = r.lengths.sorted()
         val consec = sorted.zipWithNext().all { (a, b) -> b == a + 1 }
         return if (consec) {
@@ -117,11 +165,11 @@ class NumberRulesActivity : AppCompatActivity() {
         dlg.findViewById<TextView>(R.id.dlg_field2_label).text = "位数（固定总长，逗号分隔）"
 
         pendingPrefix = dlg.findViewById<EditText>(R.id.dlg_field1).apply {
-            hint = "如 SF / 1 / YT"
+            hint = "如 SF,1,2"
             if (index >= 0) setText(rules[index].prefixes.joinToString(","))
         }
         pendingLen = dlg.findViewById<EditText>(R.id.dlg_field2).apply {
-            hint = "如 7,8,9 → 7~9位；7,9 → 7或9位"
+            hint = "如 7,8,9 → 7~9位"
             inputType = android.text.InputType.TYPE_CLASS_TEXT
             if (index >= 0) setText(rules[index].lengths.sorted().joinToString(","))
         }

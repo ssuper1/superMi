@@ -70,19 +70,25 @@ object NumberRuleStore {
         return arr.toString()
     }
 
-    private fun buildRegex(rule: NumberRule): Regex? {
+    private fun buildRegex(rule: NumberRule, defaultLen: Pair<Int, Int>?): Regex? {
         val parts = rule.prefixes.mapNotNull { p ->
             val base = Regex.escape(p)
-            if (rule.lengths.isEmpty()) {
-                "$base\\d+"
-            } else {
-                val alts = rule.lengths
-                    .mapNotNull { len ->
-                        val dc = len - p.length
-                        if (dc >= 0) "\\d{$dc}" else null
-                    }
-                    .distinct()
-                if (alts.isEmpty()) null else "$base(${alts.joinToString("|")})"
+            when {
+                rule.lengths.isNotEmpty() -> {
+                    val alts = rule.lengths
+                        .mapNotNull { len ->
+                            val dc = len - p.length
+                            if (dc >= 0) "\\d{$dc}" else null
+                        }
+                        .distinct()
+                    if (alts.isEmpty()) null else "$base(${alts.joinToString("|")})"
+                }
+                defaultLen != null -> {
+                    val dcMin = (defaultLen.first - p.length).coerceAtLeast(0)
+                    val dcMax = (defaultLen.second - p.length).coerceAtLeast(0)
+                    if (dcMax < dcMin || dcMax <= 0) null else "$base\\d{$dcMin,$dcMax}"
+                }
+                else -> "$base\\d+"
             }
         }
         if (parts.isEmpty()) return null
@@ -92,9 +98,10 @@ object NumberRuleStore {
     fun match(ctx: Context?, text: String): Pair<String, List<String>>? {
         val json = BubblePrefs.numberRulesJson(ctx)
         val rules = if (json.isNullOrBlank()) DEFAULT_RULES else parse(json)
+        val defaultLen = BubblePrefs.numberDefaultLen(ctx)
         for (rule in rules) {
             val re = try {
-                buildRegex(rule)
+                buildRegex(rule, defaultLen)
             } catch (t: Throwable) {
                 XposedBridge.log("SuperMi: number regex err: $t")
                 null

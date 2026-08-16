@@ -9,7 +9,8 @@ object ContentClassifier {
     data class Recognized(
         val type: ContentType,
         val query: String,
-        val customApps: List<String> = emptyList()
+        val customApps: List<String> = emptyList(),
+        val deepLink: Boolean = true
     )
 
     private val URL_FIND =
@@ -20,6 +21,7 @@ object ContentClassifier {
     fun classifyAll(ctx: Context?, text: String): List<Recognized> {
         val t = text.trim()
         if (t.isEmpty()) return emptyList()
+        if (t.length > BubblePrefs.maxLen(ctx)) return emptyList()
         val result = mutableListOf<Recognized>()
 
         val urlMatch = URL_FIND.find(t)
@@ -31,7 +33,14 @@ object ContentClassifier {
         }
 
         if (urlMatch != null) {
-            result.add(Recognized(ContentType.URL, urlMatch.value, platformApps))
+            result.add(
+                Recognized(
+                    ContentType.URL,
+                    urlMatch.value,
+                    platformApps,
+                    platform?.deepLink ?: true
+                )
+            )
         } else if (platform != null) {
             result.add(Recognized(ContentType.PLATFORM, t, platformApps))
         }
@@ -43,9 +52,16 @@ object ContentClassifier {
             PHONE_FIND.find(t)?.let { result.add(Recognized(ContentType.PHONE, it.value)) }
         }
 
-        val addr = AddressMatcher.analyze(ctx, t)
-        if (addr.isAddress) {
-            result.add(Recognized(ContentType.ADDRESS, addr.query))
+        val addrCandidate = when {
+            platform != null -> ""
+            urlMatch != null -> t.replace(urlMatch.value, "")
+            else -> t
+        }
+        if (addrCandidate.any { it in '\u4e00'..'\u9fa5' }) {
+            val addr = AddressMatcher.analyze(ctx, t)
+            if (addr.isAddress) {
+                result.add(Recognized(ContentType.ADDRESS, addr.query))
+            }
         }
 
         return result

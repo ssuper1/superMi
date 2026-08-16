@@ -2,6 +2,7 @@ package com.example.supermi.xposed
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Resources
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -42,7 +43,8 @@ object OverlayBubble {
     private data class ResolveCacheKey(
         val type: ContentClassifier.ContentType,
         val queryKey: String,
-        val customApps: List<String>
+        val customApps: List<String>,
+        val deepLink: Boolean
     )
 
     private class ResolveCache :
@@ -53,6 +55,20 @@ object OverlayBubble {
     }
 
     private val resolveCache = ResolveCache()
+
+    private data class AppMeta(val label: String, val icon: Drawable)
+
+    private const val ICON_CACHE_SIZE = 16
+    private const val ICON_CACHE_TTL_MS = 60_000L
+
+    private class IconCache :
+        LinkedHashMap<String, Pair<Long, AppMeta>>(ICON_CACHE_SIZE, 0.75f, true) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<String, Pair<Long, AppMeta>>?
+        ): Boolean = size > ICON_CACHE_SIZE
+    }
+
+    private val iconCache = IconCache()
 
     data class AppTarget(
         val packageName: String,
@@ -76,6 +92,7 @@ object OverlayBubble {
         }
         bgHandler.post {
             try {
+                DebugToast.refreshDebug()
                 val recognized = ContentClassifier.classifyAll(ctx, text)
                 if (recognized.isEmpty()) {
                     DebugToast.show(ctx, "未识别: ${text.take(30)}")
@@ -84,7 +101,7 @@ object OverlayBubble {
                 DebugToast.show(ctx, "识别: ${recognized.joinToString { it.type.name }}")
                 val targets = mutableListOf<AppTarget>()
                 for (rec in recognized) {
-                    targets.addAll(resolveTargets(ctx, rec.type, rec.query, rec.customApps))
+                    targets.addAll(resolveTargets(ctx, rec.type, rec.query, rec.customApps, rec.deepLink))
                 }
                 if (targets.isEmpty()) {
                     DebugToast.show(ctx, "无可打开App")
@@ -109,16 +126,17 @@ object OverlayBubble {
         ctx: Context,
         type: ContentClassifier.ContentType,
         query: String,
-        customApps: List<String>
+        customApps: List<String>,
+        deepLink: Boolean
     ): List<AppTarget> {
-        val key = ResolveCacheKey(type, cacheKey(type, query), customApps)
+        val key = ResolveCacheKey(type, cacheKey(type, query, customApps), customApps, deepLink)
         val now = System.currentTimeMillis()
         resolveCache[key]?.let { (t, list) ->
             if (now - t < RESOLVE_CACHE_TTL_MS) return list
         }
         resolveCache.remove(key)
 
-        val result = resolveTargetsInner(ctx, type, query, customApps)
+        val result = resolveTargetsInner(ctx, type, query, customApps, deepLink)
         resolveCache[key] = now to result
         return result
     }
@@ -127,7 +145,8 @@ object OverlayBubble {
         ctx: Context,
         type: ContentClassifier.ContentType,
         query: String,
-        customApps: List<String>
+        customApps: List<String>,
+        deepLink: Boolean
     ): List<AppTarget> {
         return try {
             val pm = ctx.packageManager
@@ -150,7 +169,10 @@ object OverlayBubble {
                 }
                 ContentClassifier.ContentType.URL -> {
                     val apps = if (customApps.isNotEmpty()) customApps else BubblePrefs.urlApps(ctx)
-                    val t = buildCustomTargets(pm, apps, type, query, openLauncher = false)
+                    val t = buildCustomTargets(
+                        pm, apps, type, query,
+                        openLauncher = customApps.isNotEmpty() && !deepLink
+                    )
                     if (t.isNotEmpty()) return t
                 }
                 ContentClassifier.ContentType.ADDRESS -> {
@@ -167,15 +189,10 @@ object OverlayBubble {
                 .filter { it.activityInfo != null && it.activityInfo.packageName != null }
                 .distinctBy { it.activityInfo.packageName }
                 .take(MAX_TARGETS)
-                .map { info ->
-                    val ai = info.activityInfo
-                    AppTarget(
-                        ai.packageName,
-                        ai.loadLabel(pm).toString(),
-                        ai.loadIcon(pm),
-                        type,
-                        query
-                    )
+                .mapNotNull { info ->
+                    val pkg = info.activityInfo.packageName
+                    val meta = appMeta(pm, pkg) ?: return@mapNotNull null
+                    AppTarget(pkg, meta.label, meta.icon, type, query)
                 }
                 .toList()
         } catch (t: Throwable) {
@@ -184,14 +201,31 @@ object OverlayBubble {
         }
     }
 
-    private fun cacheKey(type: ContentClassifier.ContentType, query: String): String =
-        when (type) {
-            ContentClassifier.ContentType.URL -> Uri.parse(query).host ?: query
-            else -> query
+    private fun cacheKey(type: ContentClassifier.ContentType, query: String, customApps: List<String>): String =
+        when {
+            type == ContentClassifier.ContentType.URL && customApps.isEmpty() ->
+                Uri.parse(query).host ?: query
+            else -> ""
         }
 
+    private fun appMeta(pm: PackageManager, pkg: String): AppMeta? {
+        val now = System.currentTimeMillis()
+        iconCache[pkg]?.let { (t, meta) ->
+            if (now - t < ICON_CACHE_TTL_MS) return meta
+        }
+        val ai = try {
+            pm.getApplicationInfo(pkg, 0)
+        } catch (t: Throwable) {
+            XposedBridge.log("$TAG app not found: $pkg: $t")
+            null
+        } ?: return null
+        val meta = AppMeta(pm.getApplicationLabel(ai).toString(), pm.getApplicationIcon(ai))
+        iconCache[pkg] = now to meta
+        return meta
+    }
+
     private fun buildCustomTargets(
-        pm: android.content.pm.PackageManager,
+        pm: PackageManager,
         apps: List<String>,
         type: ContentClassifier.ContentType,
         query: String,
@@ -199,24 +233,17 @@ object OverlayBubble {
     ): List<AppTarget> {
         val targets = mutableListOf<AppTarget>()
         for (pkg in apps.distinct().take(MAX_TARGETS)) {
-            val ai = try {
-                pm.getApplicationInfo(pkg, 0)
-            } catch (t: Throwable) {
-                XposedBridge.log("$TAG custom app not found: $pkg: $t")
-                null
-            }
-            if (ai != null) {
-                targets.add(
-                    AppTarget(
-                        pkg,
-                        pm.getApplicationLabel(ai).toString(),
-                        pm.getApplicationIcon(ai),
-                        type,
-                        query,
-                        openLauncher
-                    )
+            val meta = appMeta(pm, pkg) ?: continue
+            targets.add(
+                AppTarget(
+                    pkg,
+                    meta.label,
+                    meta.icon,
+                    type,
+                    query,
+                    openLauncher
                 )
-            }
+            )
         }
         return targets
     }
@@ -243,7 +270,7 @@ object OverlayBubble {
             setPadding(dp(8), dp(4), dp(8), dp(4))
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                setColor(Color.parseColor("#E63C3C3C"))
+                setColor(Color.parseColor("#D93C3C3C"))
                 cornerRadius = dp(16).toFloat()
             }
         }
@@ -253,7 +280,11 @@ object OverlayBubble {
             lp.marginStart = dp(3)
             lp.marginEnd = dp(3)
             row.addView(ImageView(ctx).apply {
-                setImageDrawable(target.icon)
+                setImageDrawable(
+                    com.example.supermi.IconUtil.rounded(
+                        target.icon, dp(24), dp(6).toFloat(), ctx.resources
+                    )
+                )
                 layoutParams = lp
                 setOnClickListener {
                     dismiss()
@@ -291,23 +322,26 @@ object OverlayBubble {
     }
 
     private fun launch(ctx: Context, target: AppTarget) {
-        val intent = if (target.openLauncher) {
-            ctx.packageManager.getLaunchIntentForPackage(target.packageName)
-        } else {
-            buildIntent(target.type, target.query)
-        } ?: ctx.packageManager.getLaunchIntentForPackage(target.packageName) ?: return
-        intent.setPackage(target.packageName)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-        try {
-            ctx.startActivity(intent)
-        } catch (t: Throwable) {
-            XposedBridge.log("$TAG launch failed for ${target.packageName}: $t")
-            intent.setPackage(null)
-            try {
-                ctx.startActivity(intent)
-            } catch (t2: Throwable) {
-                XposedBridge.log("$TAG launch fallback failed: $t2")
+        val flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+        if (!target.openLauncher) {
+            val deepLink = buildIntent(target.type, target.query)
+            if (deepLink != null) {
+                deepLink.setPackage(target.packageName)
+                deepLink.addFlags(flags)
+                try {
+                    ctx.startActivity(deepLink)
+                    return
+                } catch (t: Throwable) {
+                    XposedBridge.log("$TAG deep link failed for ${target.packageName}: $t")
+                }
             }
+        }
+        val launcher = ctx.packageManager.getLaunchIntentForPackage(target.packageName) ?: return
+        launcher.addFlags(flags)
+        try {
+            ctx.startActivity(launcher)
+        } catch (t: Throwable) {
+            XposedBridge.log("$TAG launcher failed for ${target.packageName}: $t")
         }
     }
 

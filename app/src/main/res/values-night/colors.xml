@@ -7,6 +7,7 @@
 
     <!-- 气泡位置板块：浅蓝底 + 深蓝字（夜间） -->
     <color name="blue_light">#FF2B5C8A</color>
+    <color name="blue_mid">#FF336691</color>
     <color name="blue_text">#FF82B4F0</color>
 
     <color name="page_bg">#FF0F1016</color>

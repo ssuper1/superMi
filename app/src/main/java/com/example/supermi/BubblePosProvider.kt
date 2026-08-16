@@ -21,7 +21,13 @@ class BubblePosProvider : ContentProvider() {
         const val KEY_PHONE_APP = "phone_app"
         const val KEY_PLATFORM_RULES = "platform_rules"
         const val KEY_NUMBER_RULES = "number_rules"
+        const val KEY_DEFAULT_LEN_MIN = "num_default_min"
+        const val KEY_DEFAULT_LEN_MAX = "num_default_max"
+        const val KEY_MAX_LEN = "max_len"
         const val KEY_DEBUG = "debug"
+        const val KEY_PREVIEW_ICONS = "preview_icons"
+        const val KEY_GAP12 = "gap12"
+        const val KEY_GAP23 = "gap23"
         const val CONFIG_FILE = "supermi_config"
 
         @Volatile
@@ -44,6 +50,15 @@ class BubblePosProvider : ContentProvider() {
 
         @Volatile
         var numberRulesJson: String = ""
+
+        @Volatile
+        var defaultLenMin: Int = 11
+
+        @Volatile
+        var defaultLenMax: Int = 18
+
+        @Volatile
+        var maxLen: Int = 150
 
         @Volatile
         var debug: Boolean = false
@@ -70,6 +85,9 @@ class BubblePosProvider : ContentProvider() {
                     KEY_PHONE_APP -> phoneApp = v
                     KEY_PLATFORM_RULES -> platformRulesJson = v
                     KEY_NUMBER_RULES -> numberRulesJson = v
+                    KEY_DEFAULT_LEN_MIN -> defaultLenMin = v.toIntOrNull() ?: defaultLenMin
+                    KEY_DEFAULT_LEN_MAX -> defaultLenMax = v.toIntOrNull() ?: defaultLenMax
+                    KEY_MAX_LEN -> maxLen = v.toIntOrNull() ?: maxLen
                     KEY_DEBUG -> debug = v == "1"
                 }
             }
@@ -87,6 +105,9 @@ class BubblePosProvider : ContentProvider() {
             putString(KEY_PHONE_APP, phoneApp)
             putString(KEY_PLATFORM_RULES, platformRulesJson)
             putString(KEY_NUMBER_RULES, numberRulesJson)
+            putInt(KEY_DEFAULT_LEN_MIN, defaultLenMin)
+            putInt(KEY_DEFAULT_LEN_MAX, defaultLenMax)
+            putInt(KEY_MAX_LEN, maxLen)
             putBoolean(KEY_DEBUG, debug)
         }
     }

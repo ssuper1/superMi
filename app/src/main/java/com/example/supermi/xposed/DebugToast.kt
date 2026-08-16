@@ -9,25 +9,20 @@ import de.robv.android.xposed.XposedBridge
 object DebugToast {
 
     private const val TAG = "SuperMi"
-    private const val CHECK_TTL_MS = 2000L
 
     @Volatile
     private var debug = false
 
-    @Volatile
-    private var checkedAt = 0L
+    private val handler = Handler(Looper.getMainLooper())
 
-    private fun isDebug(): Boolean {
-        val now = System.currentTimeMillis()
-        if (now - checkedAt > CHECK_TTL_MS) {
-            debug = BubblePrefs.debugEnabled(SystemContextHolder.context())
-            checkedAt = now
-        }
-        return debug
+    fun refreshDebug() {
+        debug = BubblePrefs.debugEnabled(SystemContextHolder.context())
     }
 
+    fun isDebug(): Boolean = debug
+
     fun log(msg: String) {
-        if (isDebug()) XposedBridge.log("$TAG: $msg")
+        if (debug) XposedBridge.log("$TAG: $msg")
     }
 
     fun log(msg: String, t: Throwable) {
@@ -36,8 +31,8 @@ object DebugToast {
 
     fun show(ctx: Context, msg: String) {
         log(msg)
-        if (!isDebug()) return
-        Handler(Looper.getMainLooper()).post {
+        if (!debug) return
+        handler.post {
             try {
                 Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
             } catch (t: Throwable) {

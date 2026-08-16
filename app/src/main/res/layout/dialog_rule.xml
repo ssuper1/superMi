@@ -114,6 +114,17 @@
             android:textStyle="bold" />
     </LinearLayout>
 
+    <!-- 深链开关 -->
+    <CheckBox
+        android:id="@+id/dlg_deeplink_cb"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:checked="true"
+        android:text="深链打开（关闭则仅打开App，由App用剪贴板口令解析）"
+        android:textColor="@color/text_primary"
+        android:textSize="13sp" />
+
     <!-- 按钮行 -->
     <LinearLayout
         android:layout_width="match_parent"

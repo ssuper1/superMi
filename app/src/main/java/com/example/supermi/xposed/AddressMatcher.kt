@@ -54,13 +54,13 @@ object AddressMatcher {
         val countExpr = COUNT_RE.containsMatchIn(t)
         val adminChainStrong = chain.size >= 2
 
-        val reason = buildString {
+        val reason = if (DebugToast.isDebug()) buildString {
             if (countExpr) append("count-expression ")
             if (chain.size >= 1) append("admin(${chain.size}) ")
             if (roadMatch != null) append("road ")
             if (numberMatch != null) append("number ")
             if (poiMatch != null) append("poi ")
-        }.trim()
+        }.trim() else ""
 
         val ranges = mutableListOf<IntRange>()
         chain.forEach { ranges.add(it.start..it.end) }

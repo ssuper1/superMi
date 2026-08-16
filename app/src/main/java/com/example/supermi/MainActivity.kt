@@ -27,6 +27,10 @@ import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
+    companion object {
+        private val MAX_LEN_VALUES = listOf(50, 100, 150, 200, 250, 400)
+    }
+
     private val wm: WindowManager by lazy {
         getSystemService(Context.WINDOW_SERVICE) as WindowManager
     }
@@ -39,6 +43,10 @@ class MainActivity : AppCompatActivity() {
     private var urlAppPkg: String = ""
     private var phoneAppPkg: String = ""
     private var debugEnabled: Boolean = false
+    private var maxLen: Int = BubblePrefs.DEFAULT_MAX_LEN
+    private var previewCount: Int = 1
+    private var gap12: Int = 6
+    private var gap23: Int = 6
     private var pendingType: String = BubblePosProvider.KEY_ADDR_APP
 
     private val pickerLauncher = registerForActivityResult(
@@ -85,6 +93,10 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_step_5).setOnClickListener { setStep(5) }
         findViewById<Button>(R.id.btn_step_10).setOnClickListener { setStep(10) }
 
+        findViewById<Button>(R.id.btn_preview_1).setOnClickListener { setPreviewCount(1) }
+        findViewById<Button>(R.id.btn_preview_2).setOnClickListener { setPreviewCount(2) }
+        findViewById<Button>(R.id.btn_preview_3).setOnClickListener { setPreviewCount(3) }
+
         findViewById<View>(R.id.row_addr).setOnClickListener { launchPicker(BubblePosProvider.KEY_ADDR_APP) }
         findViewById<View>(R.id.row_url).setOnClickListener { launchPicker(BubblePosProvider.KEY_URL_APP) }
         findViewById<View>(R.id.row_platform).setOnClickListener {
@@ -102,10 +114,92 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        findViewById<Button>(R.id.btn_len_50).setOnClickListener { setMaxLen(50) }
+        findViewById<Button>(R.id.btn_len_100).setOnClickListener { setMaxLen(100) }
+        findViewById<Button>(R.id.btn_len_150).setOnClickListener { setMaxLen(150) }
+        findViewById<Button>(R.id.btn_len_200).setOnClickListener { setMaxLen(200) }
+        findViewById<Button>(R.id.btn_len_250).setOnClickListener { setMaxLen(250) }
+        findViewById<Button>(R.id.btn_len_400).setOnClickListener { setMaxLen(400) }
+        updateMaxLenSeg()
+
         updateStepUi()
+        updatePreviewSeg()
+        setupGapSeekBar(R.id.seek_gap12, R.id.tv_gap12, gap12) { gap12 = it }
+        setupGapSeekBar(R.id.seek_gap23, R.id.tv_gap23, gap23) { gap23 = it }
+        findViewById<Button>(R.id.btn_reset_gap12).setOnClickListener {
+            setGap(1, 6)
+        }
+        findViewById<Button>(R.id.btn_reset_gap23).setOnClickListener {
+            setGap(2, 6)
+        }
         updateOffsetLabel()
         updateAppLabels()
         ensureOverlayPermission()
+    }
+
+    private fun setupGapSeekBar(
+        seekId: Int,
+        tvId: Int,
+        initial: Int,
+        update: (Int) -> Unit
+    ) {
+        val seek = findViewById<android.widget.SeekBar>(seekId)
+        val tv = findViewById<TextView>(tvId)
+        seek.max = 50
+        seek.progress = initial
+        tv.text = "$initial"
+        seek.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                if (!fromUser) return
+                tv.text = "$progress"
+                update(progress)
+                saveConfig()
+                refreshPreview()
+            }
+
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+        })
+    }
+
+    private fun setGap(index: Int, value: Int) {
+        val v = value.coerceIn(0, 50)
+        if (index == 1) gap12 = v else gap23 = v
+        val seekId = if (index == 1) R.id.seek_gap12 else R.id.seek_gap23
+        val tvId = if (index == 1) R.id.tv_gap12 else R.id.tv_gap23
+        findViewById<android.widget.SeekBar>(seekId).progress = v
+        findViewById<TextView>(tvId).text = "$v"
+        saveConfig()
+        refreshPreview()
+    }
+
+    private fun refreshPreview() {
+        if (previewView == null) return
+        dismissPreview()
+        showPreview()
+    }
+
+    private fun setPreviewCount(c: Int) {
+        previewCount = c.coerceIn(1, 3)
+        updatePreviewSeg()
+        saveConfig()
+        refreshPreview()
+    }
+
+    private fun updatePreviewSeg() {
+        val ids = mapOf(
+            1 to R.id.btn_preview_1,
+            2 to R.id.btn_preview_2,
+            3 to R.id.btn_preview_3
+        )
+        for ((v, id) in ids) {
+            val btn = findViewById<Button>(id)
+            val active = v == previewCount
+            btn.background = getDrawable(if (active) R.drawable.bg_seg_active else android.R.color.transparent)
+            btn.backgroundTintList = null
+            btn.setTextColor(resources.getColor(if (active) R.color.blue_text else R.color.text_tertiary, theme))
+        }
     }
 
     private fun launchPicker(type: String) {
@@ -124,19 +218,53 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun ensureOverlayPermission() {
-        if (!Settings.canDrawOverlays(this)) {
-            startActivity(
-                Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
+        if (Settings.canDrawOverlays(this)) return
+        val intent = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:$packageName")
+        )
+        try {
+            startActivity(intent)
+        } catch (_: Throwable) {
+            try {
+                startActivity(
+                    Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:$packageName")
+                    )
                 )
-            )
+            } catch (_: Throwable) {
+            }
         }
     }
 
     private fun setStep(s: Int) {
         step = s
         updateStepUi()
+    }
+
+    private fun setMaxLen(v: Int) {
+        maxLen = v
+        updateMaxLenSeg()
+        saveConfig()
+    }
+
+    private fun updateMaxLenSeg() {
+        val ids = mapOf(
+            50 to R.id.btn_len_50,
+            100 to R.id.btn_len_100,
+            150 to R.id.btn_len_150,
+            200 to R.id.btn_len_200,
+            250 to R.id.btn_len_250,
+            400 to R.id.btn_len_400
+        )
+        for ((v, id) in ids) {
+            val btn = findViewById<Button>(id)
+            val active = v == maxLen
+            btn.background = getDrawable(if (active) R.drawable.bg_seg_active else android.R.color.transparent)
+            btn.backgroundTintList = null
+            btn.setTextColor(resources.getColor(if (active) R.color.blue_text else R.color.text_tertiary, theme))
+        }
     }
 
     private fun updateStepUi() {
@@ -286,6 +414,11 @@ class MainActivity : AppCompatActivity() {
             urlAppPkg = m[BubblePosProvider.KEY_URL_APP] ?: urlAppPkg
             phoneAppPkg = m[BubblePosProvider.KEY_PHONE_APP] ?: phoneAppPkg
             debugEnabled = m[BubblePosProvider.KEY_DEBUG] == "1"
+            maxLen = m[BubblePosProvider.KEY_MAX_LEN]?.toIntOrNull() ?: maxLen
+            if (maxLen !in MAX_LEN_VALUES) maxLen = BubblePrefs.DEFAULT_MAX_LEN
+            previewCount = m[BubblePosProvider.KEY_PREVIEW_ICONS]?.toIntOrNull()?.coerceIn(1, 3) ?: previewCount
+            gap12 = m[BubblePosProvider.KEY_GAP12]?.toIntOrNull()?.coerceIn(0, 50) ?: gap12
+            gap23 = m[BubblePosProvider.KEY_GAP23]?.toIntOrNull()?.coerceIn(0, 50) ?: gap23
             BubblePosProvider.platformRulesJson =
                 m[PlatformRuleStore.KEY_PLATFORM_RULES] ?: PlatformRuleStore.toJson(PlatformRuleStore.DEFAULT_RULES)
         }
@@ -299,6 +432,7 @@ class MainActivity : AppCompatActivity() {
         BubblePosProvider.urlApp = urlAppPkg
         BubblePosProvider.phoneApp = phoneAppPkg
         BubblePosProvider.debug = debugEnabled
+        BubblePosProvider.maxLen = maxLen
     }
 
     private fun saveConfig() {
@@ -310,6 +444,10 @@ class MainActivity : AppCompatActivity() {
         m[BubblePosProvider.KEY_URL_APP] = urlAppPkg
         m[BubblePosProvider.KEY_PHONE_APP] = phoneAppPkg
         m[BubblePosProvider.KEY_DEBUG] = if (debugEnabled) "1" else "0"
+        m[BubblePosProvider.KEY_MAX_LEN] = "$maxLen"
+        m[BubblePosProvider.KEY_PREVIEW_ICONS] = "$previewCount"
+        m[BubblePosProvider.KEY_GAP12] = "$gap12"
+        m[BubblePosProvider.KEY_GAP23] = "$gap23"
         if (!m.containsKey(PlatformRuleStore.KEY_PLATFORM_RULES)) {
             m[PlatformRuleStore.KEY_PLATFORM_RULES] = PlatformRuleStore.toJson(PlatformRuleStore.DEFAULT_RULES)
         }
@@ -326,30 +464,76 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(8), dp(4), dp(8), dp(4))
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                setColor(Color.parseColor("#E63C3C3C"))
+                setColor(Color.parseColor("#D93C3C3C"))
                 cornerRadius = dp(16).toFloat()
             }
         }
 
-        val lp = LinearLayout.LayoutParams(dp(24), dp(24))
-        lp.marginStart = dp(3)
-        lp.marginEnd = dp(3)
-        row.addView(ImageView(this).apply {
-            setImageDrawable(loadPreviewIcon())
-            layoutParams = lp
-        })
+        val icons = previewIcons()
+        for ((index, icon) in icons.withIndex()) {
+            val lp = LinearLayout.LayoutParams(dp(24), dp(24))
+            lp.marginStart = if (index == 0) dp(3) else dp(0)
+            lp.marginEnd = when (index) {
+                0 -> if (icons.size > 1) dp(gap12) else dp(3)
+                1 -> if (icons.size > 2) dp(gap23) else dp(3)
+                else -> dp(3)
+            }
+            row.addView(ImageView(this).apply {
+                setImageDrawable(IconUtil.rounded(icon, dp(24), dp(6).toFloat(), resources))
+                layoutParams = lp
+            })
+        }
         return row
     }
 
-    private fun loadPreviewIcon(): android.graphics.drawable.Drawable {
-        val pkg = addrAppPkg.ifEmpty { urlAppPkg }
-        if (pkg.isNotEmpty()) {
-            try {
-                return packageManager.getApplicationIcon(pkg)
-            } catch (_: Throwable) {
-            }
+    private fun previewIcons(): List<android.graphics.drawable.Drawable> {
+        val count = previewCount.coerceIn(1, 3)
+        val icons = mutableListOf<android.graphics.drawable.Drawable>()
+        icons.add(ownAppIcon())
+        val top = topAppIcons()
+        for (i in 0 until (count - 1)) {
+            icons.add(top.getOrNull(i) ?: packageManager.defaultActivityIcon)
         }
-        return packageManager.defaultActivityIcon
+        return icons
+    }
+
+    private fun ownAppIcon(): android.graphics.drawable.Drawable = try {
+        packageManager.getApplicationIcon(packageName)
+    } catch (_: Throwable) {
+        packageManager.defaultActivityIcon
+    }
+
+    private var topAppIconsCache: List<android.graphics.drawable.Drawable>? = null
+
+    private fun topAppIcons(): List<android.graphics.drawable.Drawable> {
+        topAppIconsCache?.let { return it }
+        val icons = mutableListOf<android.graphics.drawable.Drawable>()
+        try {
+            val pm = packageManager
+            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            pm.queryIntentActivities(intent, 0)
+                .asSequence()
+                .mapNotNull { it.activityInfo?.applicationInfo }
+                .filter { it.packageName != packageName }
+                .distinctBy { it.packageName }
+                .sortedBy {
+                    try {
+                        pm.getApplicationLabel(it).toString().lowercase()
+                    } catch (_: Throwable) {
+                        ""
+                    }
+                }
+                .take(2)
+                .forEach { ai ->
+                    try {
+                        icons.add(pm.getApplicationIcon(ai))
+                    } catch (_: Throwable) {
+                    }
+                }
+        } catch (_: Throwable) {
+        }
+        topAppIconsCache = icons
+        return icons
     }
 
     override fun onPause() {

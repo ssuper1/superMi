@@ -18,6 +18,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.example.supermi.RecommendedApps
 
 class AppPickerActivity : AppCompatActivity() {
@@ -50,6 +52,8 @@ class AppPickerActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_app_picker)
+
+        applySystemBarsInsets()
 
         type = intent.getStringExtra(EXTRA_TYPE) ?: BubblePosProvider.KEY_ADDR_APP
         multi = intent.getBooleanExtra(EXTRA_MULTI, false)
@@ -119,6 +123,24 @@ class AppPickerActivity : AppCompatActivity() {
                 updateConfirm()
             }
         }.start()
+    }
+
+    private fun applySystemBarsInsets() {
+        val root = findViewById<View>(R.id.root)
+        val baseLeft = root.paddingLeft
+        val baseTop = root.paddingTop
+        val baseRight = root.paddingRight
+        val baseBottom = root.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(
+                baseLeft + bars.left,
+                baseTop + bars.top,
+                baseRight + bars.right,
+                baseBottom + bars.bottom
+            )
+            insets
+        }
     }
 
     private fun onItemTap(info: AppInfo) {
@@ -193,10 +215,13 @@ class AppPickerActivity : AppCompatActivity() {
                     } catch (_: Throwable) {
                         return@mapNotNull null
                     }
+                    val icon = IconUtil.rounded(
+                        pm.getApplicationIcon(ai), dp(40), dp(10).toFloat(), resources
+                    )
                     AppInfo(
                         pm.getApplicationLabel(ai).toString(),
                         pkg,
-                        pm.getApplicationIcon(ai),
+                        icon,
                         (ai.flags and ApplicationInfo.FLAG_SYSTEM) != 0
                     )
                 }

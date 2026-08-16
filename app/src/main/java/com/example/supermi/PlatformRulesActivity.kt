@@ -16,6 +16,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.example.supermi.xposed.PlatformRule
 import com.example.supermi.xposed.PlatformRuleStore
 
@@ -24,9 +26,11 @@ class PlatformRulesActivity : AppCompatActivity() {
     private val rules = mutableListOf<PlatformRule>()
     private lateinit var adapter: ArrayAdapter<PlatformRule>
     private var pendingApps: List<String> = emptyList()
+    private var pendingDeepLink = true
     private lateinit var pendingKw: EditText
     private lateinit var pendingLinks: EditText
     private lateinit var pendingAppBtn: Button
+    private lateinit var pendingDeepLinkCb: android.widget.CheckBox
     private var editingIndex = -1
 
     private val pickerLauncher = registerForActivityResult(
@@ -45,15 +49,20 @@ class PlatformRulesActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_platform_rules)
 
+        applySystemBarsInsets()
+
         loadRules()
+        setupTooltip()
 
         val list = findViewById<ListView>(R.id.list_rules)
         adapter = object : ArrayAdapter<PlatformRule>(this, R.layout.item_platform_rule, rules) {
             override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
                 val r = getItem(position)!!
                 val v = convertView ?: layoutInflater.inflate(R.layout.item_platform_rule, parent, false)
-                v.findViewById<TextView>(R.id.tv_kw).text = r.keyword
-                v.findViewById<TextView>(R.id.tv_app).text = "→ ${appsLabel(displayApps(r))}"
+                v.findViewById<TextView>(R.id.tv_kw).text =
+                    if (r.keyword.isEmpty()) "无" else r.keyword
+                v.findViewById<TextView>(R.id.tv_app).text =
+                    "→ ${appsLabel(displayApps(r))}${if (r.deepLink) " ·深链" else " ·仅打开"}"
                 v.findViewById<TextView>(R.id.tv_links).text = r.links.joinToString(", ")
                 return v
             }
@@ -66,6 +75,54 @@ class PlatformRulesActivity : AppCompatActivity() {
             true
         }
         findViewById<Button>(R.id.btn_add).setOnClickListener { showEditDialog(-1) }
+    }
+
+    private fun applySystemBarsInsets() {
+        val root = findViewById<View>(R.id.root)
+        val baseLeft = root.paddingLeft
+        val baseTop = root.paddingTop
+        val baseRight = root.paddingRight
+        val baseBottom = root.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(
+                baseLeft + bars.left,
+                baseTop + bars.top,
+                baseRight + bars.right,
+                baseBottom + bars.bottom
+            )
+            insets
+        }
+    }
+
+    private fun setupTooltip() {
+        val tv = findViewById<TextView>(R.id.tv_usage)
+        val full = "1.【】关键字：复制的内容里常带「【平台名】」，规则里把平台名填在【】中即可匹配，能模糊匹配变体。\n" +
+            "2.深链打开：勾选=点击直接跳到链接对应页面（部分app不支持，勾选会导致无法点击气泡无响应）；不勾=仅打开该App，由App用剪贴板口令自己识别。\n" +
+            "3.匹配优先级：① 带符号关键字 ② 链接片段 ③ 系统解析。"
+        val redText = "部分app不支持，勾选会导致无法点击气泡无响应"
+        val ss = android.text.SpannableString(full)
+        val start = full.indexOf(redText)
+        if (start >= 0) {
+            ss.setSpan(
+                android.text.style.ForegroundColorSpan(Color.RED),
+                start, start + redText.length,
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
+        tv.text = ss
+
+        val panel = findViewById<View>(R.id.panel_info)
+        findViewById<View>(R.id.btn_info).setOnClickListener {
+            panel.visibility = if (panel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        }
+        findViewById<View>(R.id.btn_close).setOnClickListener { panel.visibility = View.GONE }
+
+        val prefs = getSharedPreferences("ui_state", android.content.Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("platform_tooltip_shown", false)) {
+            panel.visibility = View.VISIBLE
+            prefs.edit().putBoolean("platform_tooltip_shown", true).apply()
+        }
     }
 
     private fun loadRules() {
@@ -90,11 +147,12 @@ class PlatformRulesActivity : AppCompatActivity() {
 
     private fun showEditDialog(index: Int) {
         editingIndex = index
-        pendingApps = if (index >= 0 && rules[index].apps.isNotEmpty()) {
-            rules[index].apps
-        } else {
-            emptyList()
+        pendingApps = when {
+            index >= 0 && rules[index].apps.isNotEmpty() -> rules[index].apps
+            index >= 0 -> listOfNotNull(rules[index].app)
+            else -> emptyList()
         }
+        pendingDeepLink = index >= 0 && rules[index].deepLink
 
         val dlg = Dialog(this)
         dlg.requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -126,9 +184,11 @@ class PlatformRulesActivity : AppCompatActivity() {
                 )
             }
         }
+        dlg.findViewById<android.widget.CheckBox>(R.id.dlg_deeplink_cb).isChecked = pendingDeepLink
 
         dlg.findViewById<Button>(R.id.dlg_cancel).setOnClickListener { dlg.dismiss() }
         dlg.findViewById<Button>(R.id.dlg_save).setOnClickListener {
+            pendingDeepLink = dlg.findViewById<android.widget.CheckBox>(R.id.dlg_deeplink_cb).isChecked
             if (saveRule()) dlg.dismiss()
         }
         dlg.show()
@@ -151,7 +211,7 @@ class PlatformRulesActivity : AppCompatActivity() {
             return false
         }
         val app = apps.first()
-        val rule = PlatformRule(kw, links, app, apps)
+        val rule = PlatformRule(kw, links, app, apps, pendingDeepLink)
         if (editingIndex >= 0) {
             rules[editingIndex] = rule
         } else {

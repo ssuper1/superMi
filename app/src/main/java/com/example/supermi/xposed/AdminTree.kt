@@ -116,7 +116,8 @@ object AdminTree {
 
     fun findChain(text: String): List<ChainStep> {
         val t = trie ?: return emptyList()
-        var best: List<ChainStep> = emptyList()
+        var bestSize = 0
+        var bestChain: List<ChainStep>? = null
         val n = text.length
         var i = 0
         while (i < n) {
@@ -129,13 +130,16 @@ object AdminTree {
                 for (node in cur.nodes) {
                     val chain = mutableListOf(ChainStep(node, i, j))
                     descend(node, text, skipSuffix(text, j), chain)
-                    if (chain.size > best.size) best = chain.toList()
-                    if (best.size >= 4) return best
+                    if (chain.size > bestSize) {
+                        bestSize = chain.size
+                        bestChain = chain
+                    }
+                    if (bestSize >= 4) return bestChain ?: emptyList()
                 }
             }
             i++
         }
-        return best
+        return bestChain ?: emptyList()
     }
 
     private fun descend(node: AdminNode, text: String, pos: Int, chain: MutableList<ChainStep>) {

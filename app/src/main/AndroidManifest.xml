@@ -43,10 +43,13 @@
             android:value="true" />
         <meta-data
             android:name="xposeddescription"
-            android:value="识别复制内容并快速跳转地图/浏览器" />
+            android:value="识别复制内容并快速跳转App" />
         <meta-data
             android:name="xposedminversion"
             android:value="82" />
+        <meta-data
+            android:name="xposedscope"
+            android:value="android" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
