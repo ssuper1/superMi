@@ -28,14 +28,29 @@ class BubblePosProvider : ContentProvider() {
         const val KEY_PREVIEW_ICONS = "preview_icons"
         const val KEY_GAP12 = "gap12"
         const val KEY_GAP23 = "gap23"
+        const val KEY_GAP12_2 = "gap12_2"
+        const val KEY_GAP12_3 = "gap12_3"
+        const val KEY_GAP23_3 = "gap23_3"
         const val KEY_ICON_SIZE = "icon_size"
         const val CONFIG_FILE = "supermi_config"
 
         @Volatile
-        var currentY: Int = BubblePrefs.DEFAULT_TOP_OFFSET
+        var y1: Int = BubblePrefs.DEFAULT_TOP_OFFSET
 
         @Volatile
-        var currentX: Int = BubblePrefs.DEFAULT_X_OFFSET
+        var x1: Int = BubblePrefs.DEFAULT_X_OFFSET
+
+        @Volatile
+        var y2: Int = BubblePrefs.DEFAULT_TOP_OFFSET
+
+        @Volatile
+        var x2: Int = BubblePrefs.DEFAULT_X_OFFSET
+
+        @Volatile
+        var y3: Int = BubblePrefs.DEFAULT_TOP_OFFSET
+
+        @Volatile
+        var x3: Int = BubblePrefs.DEFAULT_X_OFFSET
 
         @Volatile
         var addrApp: String = ""
@@ -65,6 +80,15 @@ class BubblePosProvider : ContentProvider() {
         var iconSize: Int = BubblePrefs.DEFAULT_ICON_SIZE
 
         @Volatile
+        var gap12_2: Int = 6
+
+        @Volatile
+        var gap12_3: Int = 6
+
+        @Volatile
+        var gap23_3: Int = 6
+
+        @Volatile
         var debug: Boolean = false
     }
 
@@ -82,8 +106,14 @@ class BubblePosProvider : ContentProvider() {
                 val k = line.substring(0, i).trim()
                 val v = line.substring(i + 1).trim()
                 when (k) {
-                    KEY_Y -> currentY = v.toIntOrNull() ?: currentY
-                    KEY_X -> currentX = v.toIntOrNull() ?: currentX
+                    KEY_Y -> { y1 = v.toIntOrNull() ?: y1 }
+                    KEY_X -> { x1 = v.toIntOrNull() ?: x1 }
+                    "y1" -> y1 = v.toIntOrNull() ?: y1
+                    "x1" -> x1 = v.toIntOrNull() ?: x1
+                    "y2" -> y2 = v.toIntOrNull() ?: y2
+                    "x2" -> x2 = v.toIntOrNull() ?: x2
+                    "y3" -> y3 = v.toIntOrNull() ?: y3
+                    "x3" -> x3 = v.toIntOrNull() ?: x3
                     KEY_ADDR_APP -> addrApp = v
                     KEY_URL_APP -> urlApp = v
                     KEY_PHONE_APP -> phoneApp = v
@@ -93,6 +123,14 @@ class BubblePosProvider : ContentProvider() {
                     KEY_DEFAULT_LEN_MAX -> defaultLenMax = v.toIntOrNull() ?: defaultLenMax
                     KEY_MAX_LEN -> maxLen = v.toIntOrNull() ?: maxLen
                     KEY_ICON_SIZE -> iconSize = v.toIntOrNull() ?: iconSize
+                    KEY_GAP12_2 -> gap12_2 = v.toIntOrNull() ?: gap12_2
+                    KEY_GAP12_3 -> gap12_3 = v.toIntOrNull() ?: gap12_3
+                    KEY_GAP23_3 -> gap23_3 = v.toIntOrNull() ?: gap23_3
+                    KEY_GAP12 -> {
+                        gap12_2 = v.toIntOrNull() ?: gap12_2
+                        gap12_3 = v.toIntOrNull() ?: gap12_3
+                    }
+                    KEY_GAP23 -> gap23_3 = v.toIntOrNull() ?: gap23_3
                     KEY_DEBUG -> debug = v == "1"
                 }
             }
@@ -103,8 +141,12 @@ class BubblePosProvider : ContentProvider() {
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
         if (method != METHOD_GET) return null
         return Bundle().apply {
-            putInt(KEY_Y, currentY)
-            putInt(KEY_X, currentX)
+            putInt("y1", y1)
+            putInt("x1", x1)
+            putInt("y2", y2)
+            putInt("x2", x2)
+            putInt("y3", y3)
+            putInt("x3", x3)
             putString(KEY_ADDR_APP, addrApp)
             putString(KEY_URL_APP, urlApp)
             putString(KEY_PHONE_APP, phoneApp)
@@ -114,6 +156,9 @@ class BubblePosProvider : ContentProvider() {
             putInt(KEY_DEFAULT_LEN_MAX, defaultLenMax)
             putInt(KEY_MAX_LEN, maxLen)
             putInt(KEY_ICON_SIZE, iconSize)
+            putInt(KEY_GAP12_2, gap12_2)
+            putInt(KEY_GAP12_3, gap12_3)
+            putInt(KEY_GAP23_3, gap23_3)
             putBoolean(KEY_DEBUG, debug)
         }
     }

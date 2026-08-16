@@ -8,8 +8,6 @@ import de.robv.android.xposed.XposedBridge
 
 object BubblePrefs {
 
-    const val KEY_TOP_OFFSET = "supermi_bubble_top_offset"
-    const val KEY_X_OFFSET = "supermi_bubble_x_offset"
     const val KEY_ADDR_APP = "supermi_addr_app"
     const val KEY_URL_APP = "supermi_url_app"
     const val KEY_PHONE_APP = "supermi_phone_app"
@@ -34,16 +32,18 @@ object BubblePrefs {
     @Volatile
     private var lastPersistedSig: String? = null
 
-    fun topOffsetDp(ctx: Context?): Int {
-        config(ctx)?.getInt("y")?.let { return it }
+    fun topOffsetDp(ctx: Context?, count: Int): Int {
+        val n = count.coerceIn(1, 3)
+        config(ctx)?.getInt("y$n")?.let { return it }
         val resolver = ctx?.contentResolver ?: return DEFAULT_TOP_OFFSET
-        return Settings.System.getInt(resolver, KEY_TOP_OFFSET, DEFAULT_TOP_OFFSET)
+        return Settings.System.getInt(resolver, "supermi_bubble_y$n", DEFAULT_TOP_OFFSET)
     }
 
-    fun xOffsetDp(ctx: Context?): Int {
-        config(ctx)?.getInt("x")?.let { return it }
+    fun xOffsetDp(ctx: Context?, count: Int): Int {
+        val n = count.coerceIn(1, 3)
+        config(ctx)?.getInt("x$n")?.let { return it }
         val resolver = ctx?.contentResolver ?: return DEFAULT_X_OFFSET
-        return Settings.System.getInt(resolver, KEY_X_OFFSET, DEFAULT_X_OFFSET)
+        return Settings.System.getInt(resolver, "supermi_bubble_x$n", DEFAULT_X_OFFSET)
     }
 
     fun addrApps(ctx: Context?): List<String> = splitApps(config(ctx)?.getString("addr_app"))
@@ -85,6 +85,19 @@ object BubblePrefs {
         return Settings.System.getInt(resolver, KEY_MAX_LEN, DEFAULT_MAX_LEN)
     }
 
+    fun gap12(ctx: Context?, count: Int): Int {
+        val key = if (count >= 3) "gap12_3" else "gap12_2"
+        config(ctx)?.getInt(key)?.let { return it }
+        val resolver = ctx?.contentResolver ?: return 6
+        return Settings.System.getInt(resolver, "supermi_$key", Settings.System.getInt(resolver, "supermi_gap12", 6))
+    }
+
+    fun gap23(ctx: Context?, count: Int): Int {
+        config(ctx)?.getInt("gap23_3")?.let { return it }
+        val resolver = ctx?.contentResolver ?: return 6
+        return Settings.System.getInt(resolver, "supermi_gap23_3", Settings.System.getInt(resolver, "supermi_gap23", 6))
+    }
+
     fun debugEnabled(ctx: Context?): Boolean {
         config(ctx)?.getBoolean("debug")?.let { return it }
         val resolver = ctx?.contentResolver ?: return false
@@ -122,22 +135,31 @@ object BubblePrefs {
 
     private fun signature(b: Bundle): String =
         listOf(
-            b.getInt("y", DEFAULT_TOP_OFFSET).toString(),
-            b.getInt("x", DEFAULT_X_OFFSET).toString(),
+            b.getInt("y1", DEFAULT_TOP_OFFSET).toString(),
+            b.getInt("y2", DEFAULT_TOP_OFFSET).toString(),
+            b.getInt("y3", DEFAULT_TOP_OFFSET).toString(),
+            b.getInt("x1", DEFAULT_X_OFFSET).toString(),
+            b.getInt("x2", DEFAULT_X_OFFSET).toString(),
+            b.getInt("x3", DEFAULT_X_OFFSET).toString(),
             b.getString("addr_app") ?: "",
             b.getString("url_app") ?: "",
             b.getString("phone_app") ?: "",
             b.getString(PlatformRuleStore.KEY_PLATFORM_RULES) ?: "",
             b.getString(NumberRuleStore.KEY_NUMBER_RULES) ?: "",
             b.getBoolean("debug").toString(),
-            b.getInt("max_len", DEFAULT_MAX_LEN).toString()
+            b.getInt("max_len", DEFAULT_MAX_LEN).toString(),
+            b.getInt("gap12_2", 6).toString(),
+            b.getInt("gap12_3", 6).toString(),
+            b.getInt("gap23_3", 6).toString()
         ).joinToString("\u0000")
 
     private fun persistSettings(ctx: Context, b: Bundle) {
         try {
             val cr = ctx.contentResolver
-            Settings.System.putInt(cr, KEY_TOP_OFFSET, b.getInt("y", DEFAULT_TOP_OFFSET))
-            Settings.System.putInt(cr, KEY_X_OFFSET, b.getInt("x", DEFAULT_X_OFFSET))
+            for (n in 1..3) {
+                Settings.System.putInt(cr, "supermi_bubble_x$n", b.getInt("x$n", DEFAULT_X_OFFSET))
+                Settings.System.putInt(cr, "supermi_bubble_y$n", b.getInt("y$n", DEFAULT_TOP_OFFSET))
+            }
             Settings.System.putString(cr, KEY_ADDR_APP, b.getString("addr_app"))
             Settings.System.putString(cr, KEY_URL_APP, b.getString("url_app"))
             Settings.System.putString(cr, KEY_PHONE_APP, b.getString("phone_app"))
@@ -147,6 +169,9 @@ object BubblePrefs {
             Settings.System.putInt(cr, "supermi_num_default_max", b.getInt("num_default_max", DEFAULT_LEN_MAX))
             Settings.System.putInt(cr, "supermi_icon_size", b.getInt("icon_size", DEFAULT_ICON_SIZE))
             Settings.System.putInt(cr, KEY_MAX_LEN, b.getInt("max_len", DEFAULT_MAX_LEN))
+            Settings.System.putInt(cr, "supermi_gap12_2", b.getInt("gap12_2", 6))
+            Settings.System.putInt(cr, "supermi_gap12_3", b.getInt("gap12_3", 6))
+            Settings.System.putInt(cr, "supermi_gap23_3", b.getInt("gap23_3", 6))
             Settings.System.putInt(cr, KEY_DEBUG, if (b.getBoolean("debug")) 1 else 0)
         } catch (_: Throwable) {
         }
@@ -155,8 +180,10 @@ object BubblePrefs {
     private fun readSettings(ctx: Context): Bundle? = try {
         val cr = ctx.contentResolver
         Bundle().apply {
-            putInt("y", Settings.System.getInt(cr, KEY_TOP_OFFSET, DEFAULT_TOP_OFFSET))
-            putInt("x", Settings.System.getInt(cr, KEY_X_OFFSET, DEFAULT_X_OFFSET))
+            for (n in 1..3) {
+                putInt("x$n", Settings.System.getInt(cr, "supermi_bubble_x$n", DEFAULT_X_OFFSET))
+                putInt("y$n", Settings.System.getInt(cr, "supermi_bubble_y$n", DEFAULT_TOP_OFFSET))
+            }
             putString("addr_app", Settings.System.getString(cr, KEY_ADDR_APP))
             putString("url_app", Settings.System.getString(cr, KEY_URL_APP))
             putString("phone_app", Settings.System.getString(cr, KEY_PHONE_APP))
@@ -166,6 +193,9 @@ object BubblePrefs {
             putInt("num_default_max", Settings.System.getInt(cr, "supermi_num_default_max", DEFAULT_LEN_MAX))
             putInt("icon_size", Settings.System.getInt(cr, "supermi_icon_size", DEFAULT_ICON_SIZE))
             putInt("max_len", Settings.System.getInt(cr, KEY_MAX_LEN, DEFAULT_MAX_LEN))
+            putInt("gap12_2", Settings.System.getInt(cr, "supermi_gap12_2", Settings.System.getInt(cr, "supermi_gap12", 6)))
+            putInt("gap12_3", Settings.System.getInt(cr, "supermi_gap12_3", Settings.System.getInt(cr, "supermi_gap12", 6)))
+            putInt("gap23_3", Settings.System.getInt(cr, "supermi_gap23_3", Settings.System.getInt(cr, "supermi_gap23", 6)))
             putBoolean("debug", Settings.System.getInt(cr, KEY_DEBUG, 0) == 1)
         }
     } catch (_: Throwable) {

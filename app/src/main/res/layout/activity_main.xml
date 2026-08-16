@@ -148,7 +148,7 @@
                     android:background="@drawable/bg_hint"
                     android:lineSpacingExtra="3dp"
                     android:padding="10dp"
-                    android:text="点击「显示预览」，气泡会真实叠加在屏幕上方展示应用后的位置，可按方向键微调。"
+                    android:text="点击「显示预览」，气泡会真实叠加在屏幕上方展示应用后的位置，不同图标个数布局单独调整。"
                     android:textColor="@color/text_primary"
                     android:textSize="12sp" />
 

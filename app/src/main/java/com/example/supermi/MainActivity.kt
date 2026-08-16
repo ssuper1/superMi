@@ -36,8 +36,8 @@ class MainActivity : AppCompatActivity() {
     }
     private var previewView: View? = null
     private var previewParams: WindowManager.LayoutParams? = null
-    private var offsetY: Int = BubblePrefs.DEFAULT_TOP_OFFSET
-    private var offsetX: Int = BubblePrefs.DEFAULT_X_OFFSET
+    private val posX = IntArray(4) { BubblePrefs.DEFAULT_X_OFFSET }
+    private val posY = IntArray(4) { BubblePrefs.DEFAULT_TOP_OFFSET }
     private var step: Int = 5
     private var addrAppPkg: String = ""
     private var urlAppPkg: String = ""
@@ -45,8 +45,9 @@ class MainActivity : AppCompatActivity() {
     private var debugEnabled: Boolean = false
     private var maxLen: Int = BubblePrefs.DEFAULT_MAX_LEN
     private var previewCount: Int = 1
-    private var gap12: Int = 6
-    private var gap23: Int = 6
+    private var gap12_2: Int = 6
+    private var gap12_3: Int = 6
+    private var gap23_3: Int = 6
     private var iconSize: Int = BubblePrefs.DEFAULT_ICON_SIZE
     private var pendingType: String = BubblePosProvider.KEY_ADDR_APP
 
@@ -125,58 +126,62 @@ class MainActivity : AppCompatActivity() {
 
         updateStepUi()
         updatePreviewSeg()
-        setupGapSeekBar(R.id.seek_gap12, R.id.tv_gap12, gap12) { gap12 = it }
-        setupGapSeekBar(R.id.seek_gap23, R.id.tv_gap23, gap23) { gap23 = it }
         setupIconSeekBar(R.id.seek_icon, R.id.tv_icon, iconSize) { iconSize = it }
         findViewById<Button>(R.id.btn_reset_icon).setOnClickListener {
             setIconSize(BubblePrefs.DEFAULT_ICON_SIZE)
         }
-        findViewById<Button>(R.id.btn_reset_gap12).setOnClickListener {
-            setGap(1, 6)
-        }
-        findViewById<Button>(R.id.btn_reset_gap23).setOnClickListener {
-            setGap(2, 6)
-        }
+        findViewById<android.widget.SeekBar>(R.id.seek_gap12).setOnSeekBarChangeListener(gapListener(1))
+        findViewById<android.widget.SeekBar>(R.id.seek_gap23).setOnSeekBarChangeListener(gapListener(2))
+        findViewById<Button>(R.id.btn_reset_gap12).setOnClickListener { setGap(1, 6) }
+        findViewById<Button>(R.id.btn_reset_gap23).setOnClickListener { setGap(2, 6) }
+        updateGapUI()
         updateOffsetLabel()
         updateAppLabels()
         ensureOverlayPermission()
     }
 
-    private fun setupGapSeekBar(
-        seekId: Int,
-        tvId: Int,
-        initial: Int,
-        update: (Int) -> Unit
-    ) {
-        val seek = findViewById<android.widget.SeekBar>(seekId)
-        val tv = findViewById<TextView>(tvId)
-        seek.max = 50
-        seek.progress = initial
-        tv.text = "$initial"
-        seek.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
-                if (!fromUser) return
-                tv.text = "$progress"
-                update(progress)
-                saveConfig()
-                refreshPreview()
-            }
+    private fun gapListener(index: Int) = object : android.widget.SeekBar.OnSeekBarChangeListener {
+        override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+            if (!fromUser) return
+            setGap(index, progress)
+        }
 
-            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+        override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
 
-            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
-        })
+        override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+    }
+
+    private fun currentGap12(): Int = when (previewCount.coerceIn(1, 3)) {
+        2 -> gap12_2
+        else -> gap12_3
     }
 
     private fun setGap(index: Int, value: Int) {
         val v = value.coerceIn(0, 50)
-        if (index == 1) gap12 = v else gap23 = v
-        val seekId = if (index == 1) R.id.seek_gap12 else R.id.seek_gap23
-        val tvId = if (index == 1) R.id.tv_gap12 else R.id.tv_gap23
-        findViewById<android.widget.SeekBar>(seekId).progress = v
-        findViewById<TextView>(tvId).text = "$v"
+        when (index) {
+            1 -> {
+                if (previewCount == 2) gap12_2 = v else gap12_3 = v
+            }
+            else -> gap23_3 = v
+        }
+        updateGapUI()
         saveConfig()
         refreshPreview()
+    }
+
+    private fun updateGapUI() {
+        val n = previewCount.coerceIn(1, 3)
+        val seek12 = findViewById<android.widget.SeekBar>(R.id.seek_gap12)
+        val seek23 = findViewById<android.widget.SeekBar>(R.id.seek_gap23)
+        val tv12 = findViewById<TextView>(R.id.tv_gap12)
+        val tv23 = findViewById<TextView>(R.id.tv_gap23)
+        val v12 = currentGap12()
+        seek12.isEnabled = n >= 2
+        seek23.isEnabled = n >= 3
+        seek12.progress = v12
+        tv12.text = "$v12"
+        seek23.progress = gap23_3
+        tv23.text = "${gap23_3}"
     }
 
     private fun setupIconSeekBar(
@@ -224,6 +229,7 @@ class MainActivity : AppCompatActivity() {
     private fun setPreviewCount(c: Int) {
         previewCount = c.coerceIn(1, 3)
         updatePreviewSeg()
+        updateGapUI()
         saveConfig()
         refreshPreview()
     }
@@ -324,13 +330,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun resetOffset() {
-        offsetY = BubblePrefs.DEFAULT_TOP_OFFSET
-        offsetX = BubblePrefs.DEFAULT_X_OFFSET
+        for (i in 1..3) {
+            posY[i] = BubblePrefs.DEFAULT_TOP_OFFSET
+            posX[i] = BubblePrefs.DEFAULT_X_OFFSET
+        }
         applyOffset()
     }
 
     private fun updateOffsetLabel() {
-        findViewById<TextView>(R.id.tv_offset).text = "Y: $offsetY  X: $offsetX"
+        val n = previewCount.coerceIn(1, 3)
+        findViewById<TextView>(R.id.tv_offset).text = "$n 个图标  Y: ${posY[n]}  X: ${posX[n]}"
     }
 
     private fun updateAppLabels() {
@@ -386,8 +395,9 @@ class MainActivity : AppCompatActivity() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            x = dp(offsetX)
-            y = dp(offsetY)
+            val n = previewCount.coerceIn(1, 3)
+            x = dp(posX[n])
+            y = dp(posY[n])
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
             setFitInsetsTypes(0)
             setTitle("SuperMi Preview")
@@ -413,12 +423,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun moveY(delta: Int) {
-        offsetY = (offsetY + delta).coerceIn(0, 600)
+        val n = previewCount.coerceIn(1, 3)
+        posY[n] = (posY[n] + delta).coerceIn(0, 600)
         applyOffset()
     }
 
     private fun moveX(delta: Int) {
-        offsetX = (offsetX + delta).coerceIn(-400, 400)
+        val n = previewCount.coerceIn(1, 3)
+        posX[n] = (posX[n] + delta).coerceIn(-400, 400)
         applyOffset()
     }
 
@@ -428,8 +440,9 @@ class MainActivity : AppCompatActivity() {
         val params = previewParams
         val view = previewView
         if (params != null && view != null) {
-            params.y = dp(offsetY)
-            params.x = dp(offsetX)
+            val n = previewCount.coerceIn(1, 3)
+            params.y = dp(posY[n])
+            params.x = dp(posX[n])
             try {
                 wm.updateViewLayout(view, params)
             } catch (_: Throwable) {
@@ -447,34 +460,76 @@ class MainActivity : AppCompatActivity() {
             try {
                 val lines = File(filesDir, "supermi_pos").readLines()
                 if (lines.size >= 2) {
-                    offsetY = lines[0].trim().toIntOrNull() ?: offsetY
-                    offsetX = lines[1].trim().toIntOrNull() ?: offsetX
+                    posY[1] = lines[0].trim().toIntOrNull() ?: posY[1]
+                    posX[1] = lines[1].trim().toIntOrNull() ?: posX[1]
+                    for (i in 2..3) {
+                        posY[i] = posY[1]
+                        posX[i] = posX[1]
+                    }
                 }
             } catch (_: Throwable) {
             }
         } else {
-            offsetY = m[BubblePosProvider.KEY_Y]?.toIntOrNull() ?: offsetY
-            offsetX = m[BubblePosProvider.KEY_X]?.toIntOrNull() ?: offsetX
-            addrAppPkg = m[BubblePosProvider.KEY_ADDR_APP] ?: addrAppPkg
-            urlAppPkg = m[BubblePosProvider.KEY_URL_APP] ?: urlAppPkg
-            phoneAppPkg = m[BubblePosProvider.KEY_PHONE_APP] ?: phoneAppPkg
-            debugEnabled = m[BubblePosProvider.KEY_DEBUG] == "1"
-            maxLen = m[BubblePosProvider.KEY_MAX_LEN]?.toIntOrNull() ?: maxLen
-            if (maxLen !in MAX_LEN_VALUES) maxLen = BubblePrefs.DEFAULT_MAX_LEN
-            previewCount = m[BubblePosProvider.KEY_PREVIEW_ICONS]?.toIntOrNull()?.coerceIn(1, 3) ?: previewCount
-            gap12 = m[BubblePosProvider.KEY_GAP12]?.toIntOrNull()?.coerceIn(0, 50) ?: gap12
-            gap23 = m[BubblePosProvider.KEY_GAP23]?.toIntOrNull()?.coerceIn(0, 50) ?: gap23
-            iconSize = m[BubblePosProvider.KEY_ICON_SIZE]?.toIntOrNull()
-                ?.coerceIn(BubblePrefs.ICON_SIZE_MIN, BubblePrefs.ICON_SIZE_MAX) ?: iconSize
-            BubblePosProvider.platformRulesJson =
-                m[PlatformRuleStore.KEY_PLATFORM_RULES] ?: PlatformRuleStore.toJson(PlatformRuleStore.DEFAULT_RULES)
+            for (i in 1..3) {
+                posY[i] = m["y$i"]?.toIntOrNull() ?: posY[i]
+                posX[i] = m["x$i"]?.toIntOrNull() ?: posX[i]
+            }
+            if (m["x1"] == null) {
+                val oldX = m[BubblePosProvider.KEY_X]?.toIntOrNull() ?: BubblePrefs.DEFAULT_X_OFFSET
+                val oldY = m[BubblePosProvider.KEY_Y]?.toIntOrNull() ?: BubblePrefs.DEFAULT_TOP_OFFSET
+                for (i in 1..3) {
+                    posX[i] = oldX
+                    posY[i] = oldY
+                }
+            }
         }
+        loadFieldsFromSettings(m)
         syncProvider()
     }
 
+    private fun loadFieldsFromSettings(m: Map<String, String>) {
+        for (i in 1..3) {
+            if (m["y$i"] == null) posY[i] = fromSettings("bubble_y$i", posY[i])
+            if (m["x$i"] == null) posX[i] = fromSettings("bubble_x$i", posX[i])
+        }
+        addrAppPkg = m[BubblePosProvider.KEY_ADDR_APP] ?: fromSettingsString("addr_app") ?: addrAppPkg
+        urlAppPkg = m[BubblePosProvider.KEY_URL_APP] ?: fromSettingsString("url_app") ?: urlAppPkg
+        phoneAppPkg = m[BubblePosProvider.KEY_PHONE_APP] ?: fromSettingsString("phone_app") ?: phoneAppPkg
+        if (m.containsKey(BubblePosProvider.KEY_DEBUG)) {
+            debugEnabled = m[BubblePosProvider.KEY_DEBUG] == "1"
+        } else {
+            debugEnabled = fromSettings("debug", if (debugEnabled) 1 else 0) == 1
+        }
+        maxLen = m[BubblePosProvider.KEY_MAX_LEN]?.toIntOrNull() ?: fromSettings("max_len", maxLen)
+        if (maxLen !in MAX_LEN_VALUES) maxLen = BubblePrefs.DEFAULT_MAX_LEN
+        previewCount = m[BubblePosProvider.KEY_PREVIEW_ICONS]?.toIntOrNull()?.coerceIn(1, 3) ?: previewCount
+        gap12_2 = m[BubblePosProvider.KEY_GAP12_2]?.toIntOrNull()?.coerceIn(0, 50)
+            ?: m[BubblePosProvider.KEY_GAP12]?.toIntOrNull()?.coerceIn(0, 50)
+            ?: fromSettings("gap12_2", fromSettings("gap12", gap12_2))
+        gap12_3 = m[BubblePosProvider.KEY_GAP12_3]?.toIntOrNull()?.coerceIn(0, 50)
+            ?: m[BubblePosProvider.KEY_GAP12]?.toIntOrNull()?.coerceIn(0, 50)
+            ?: fromSettings("gap12_3", fromSettings("gap12", gap12_3))
+        gap23_3 = m[BubblePosProvider.KEY_GAP23_3]?.toIntOrNull()?.coerceIn(0, 50)
+            ?: m[BubblePosProvider.KEY_GAP23]?.toIntOrNull()?.coerceIn(0, 50)
+            ?: fromSettings("gap23_3", fromSettings("gap23", gap23_3))
+        iconSize = m[BubblePosProvider.KEY_ICON_SIZE]?.toIntOrNull()
+            ?.coerceIn(BubblePrefs.ICON_SIZE_MIN, BubblePrefs.ICON_SIZE_MAX)
+            ?: fromSettings("icon_size", iconSize)
+        BubblePosProvider.platformRulesJson = m[PlatformRuleStore.KEY_PLATFORM_RULES]
+            ?: fromSettingsString(PlatformRuleStore.KEY_PLATFORM_RULES)
+            ?: PlatformRuleStore.toJson(PlatformRuleStore.DEFAULT_RULES)
+        BubblePosProvider.numberRulesJson = m[NumberRuleStore.KEY_NUMBER_RULES]
+            ?: fromSettingsString(NumberRuleStore.KEY_NUMBER_RULES)
+            ?: NumberRuleStore.toJson(NumberRuleStore.DEFAULT_RULES)
+    }
+
     private fun syncProvider() {
-        BubblePosProvider.currentY = offsetY
-        BubblePosProvider.currentX = offsetX
+        BubblePosProvider.y1 = posY[1]
+        BubblePosProvider.x1 = posX[1]
+        BubblePosProvider.y2 = posY[2]
+        BubblePosProvider.x2 = posX[2]
+        BubblePosProvider.y3 = posY[3]
+        BubblePosProvider.x3 = posX[3]
         BubblePosProvider.addrApp = addrAppPkg
         BubblePosProvider.urlApp = urlAppPkg
         BubblePosProvider.phoneApp = phoneAppPkg
@@ -486,16 +541,21 @@ class MainActivity : AppCompatActivity() {
     private fun saveConfig() {
         syncProvider()
         val m = AppConfig.read(this)
-        m[BubblePosProvider.KEY_Y] = "$offsetY"
-        m[BubblePosProvider.KEY_X] = "$offsetX"
+        m.remove(BubblePosProvider.KEY_X)
+        m.remove(BubblePosProvider.KEY_Y)
+        for (i in 1..3) {
+            m["x$i"] = "${posX[i]}"
+            m["y$i"] = "${posY[i]}"
+        }
         m[BubblePosProvider.KEY_ADDR_APP] = addrAppPkg
         m[BubblePosProvider.KEY_URL_APP] = urlAppPkg
         m[BubblePosProvider.KEY_PHONE_APP] = phoneAppPkg
         m[BubblePosProvider.KEY_DEBUG] = if (debugEnabled) "1" else "0"
         m[BubblePosProvider.KEY_MAX_LEN] = "$maxLen"
         m[BubblePosProvider.KEY_PREVIEW_ICONS] = "$previewCount"
-        m[BubblePosProvider.KEY_GAP12] = "$gap12"
-        m[BubblePosProvider.KEY_GAP23] = "$gap23"
+        m[BubblePosProvider.KEY_GAP12_2] = "$gap12_2"
+        m[BubblePosProvider.KEY_GAP12_3] = "$gap12_3"
+        m[BubblePosProvider.KEY_GAP23_3] = "$gap23_3"
         m[BubblePosProvider.KEY_ICON_SIZE] = "$iconSize"
         if (!m.containsKey(PlatformRuleStore.KEY_PLATFORM_RULES)) {
             m[PlatformRuleStore.KEY_PLATFORM_RULES] = PlatformRuleStore.toJson(PlatformRuleStore.DEFAULT_RULES)
@@ -504,6 +564,18 @@ class MainActivity : AppCompatActivity() {
             m[NumberRuleStore.KEY_NUMBER_RULES] = NumberRuleStore.toJson(NumberRuleStore.DEFAULT_RULES)
         }
         AppConfig.write(this, m)
+    }
+
+    private fun fromSettings(key: String, def: Int): Int = try {
+        Settings.System.getInt(contentResolver, "supermi_$key", def)
+    } catch (_: Throwable) {
+        def
+    }
+
+    private fun fromSettingsString(key: String): String? = try {
+        Settings.System.getString(contentResolver, "supermi_$key")
+    } catch (_: Throwable) {
+        null
     }
 
     private fun buildPreviewRow(): View {
@@ -530,8 +602,8 @@ class MainActivity : AppCompatActivity() {
             val lp = LinearLayout.LayoutParams(dp(isz), dp(isz))
             lp.marginStart = if (index == 0) dp(3) else dp(0)
             lp.marginEnd = when (index) {
-                0 -> if (icons.size > 1) dp(gap12) else dp(3)
-                1 -> if (icons.size > 2) dp(gap23) else dp(3)
+                0 -> if (icons.size > 1) dp(if (icons.size >= 3) gap12_3 else gap12_2) else dp(3)
+                1 -> if (icons.size > 2) dp(gap23_3) else dp(3)
                 else -> dp(3)
             }
             row.addView(ImageView(this).apply {

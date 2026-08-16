@@ -99,6 +99,11 @@ object OverlayBubble {
                     return@post
                 }
                 DebugToast.show(ctx, "识别: ${recognized.joinToString { it.type.name }}")
+                if (BubblePrefs.debugEnabled(ctx)) {
+                    for (rec in recognized) {
+                        XposedBridge.log("$TAG debug recognized -> type=${rec.type} query=[${rec.query}] apps=${rec.customApps} deepLink=${rec.deepLink}")
+                    }
+                }
                 val targets = mutableListOf<AppTarget>()
                 for (rec in recognized) {
                     targets.addAll(resolveTargets(ctx, rec.type, rec.query, rec.customApps, rec.deepLink))
@@ -202,11 +207,7 @@ object OverlayBubble {
     }
 
     private fun cacheKey(type: ContentClassifier.ContentType, query: String, customApps: List<String>): String =
-        when {
-            type == ContentClassifier.ContentType.URL && customApps.isEmpty() ->
-                Uri.parse(query).host ?: query
-            else -> ""
-        }
+        query
 
     private fun appMeta(pm: PackageManager, pkg: String): AppMeta? {
         val now = System.currentTimeMillis()
@@ -224,8 +225,7 @@ object OverlayBubble {
         return meta
     }
 
-    private fun buildCustomTargets(
-        pm: PackageManager,
+    private fun buildCustomTargets(        pm: PackageManager,
         apps: List<String>,
         type: ContentClassifier.ContentType,
         query: String,
@@ -265,7 +265,9 @@ object OverlayBubble {
         windowManager = wm
 
         val iconSize = BubblePrefs.iconSizeDp(ctx)
-        val gap = (iconSize / 8).coerceAtLeast(2)
+        val count = targets.size
+        val gap12 = BubblePrefs.gap12(ctx, count)
+        val gap23 = BubblePrefs.gap23(ctx, count)
         val padH = (iconSize / 3).coerceAtLeast(6)
         val padV = (iconSize / 6).coerceAtLeast(3)
         val corner = (iconSize * 2 / 3).coerceAtLeast(10)
@@ -281,10 +283,14 @@ object OverlayBubble {
             }
         }
 
-        for (target in targets) {
+        for ((index, target) in targets.withIndex()) {
             val lp = LinearLayout.LayoutParams(dp(iconSize), dp(iconSize))
-            lp.marginStart = dp(gap)
-            lp.marginEnd = dp(gap)
+            lp.marginStart = if (index == 0) dp(3) else dp(0)
+            lp.marginEnd = when (index) {
+                0 -> if (count > 1) dp(gap12) else dp(3)
+                1 -> if (count > 2) dp(gap23) else dp(3)
+                else -> dp(3)
+            }
             row.addView(ImageView(ctx).apply {
                 setImageDrawable(
                     com.example.supermi.IconUtil.rounded(
@@ -308,8 +314,9 @@ object OverlayBubble {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            x = dp(BubblePrefs.xOffsetDp(ctx))
-            y = dp(BubblePrefs.topOffsetDp(ctx))
+            val n = targets.size.coerceIn(1, 3)
+            x = dp(BubblePrefs.xOffsetDp(ctx, n))
+            y = dp(BubblePrefs.topOffsetDp(ctx, n))
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
             setFitInsetsTypes(0)
             setTitle("SuperMi QuickLaunch")
@@ -332,6 +339,9 @@ object OverlayBubble {
         if (!target.openLauncher) {
             val deepLink = buildIntent(target.type, target.query)
             if (deepLink != null) {
+                if (BubblePrefs.debugEnabled(ctx)) {
+                    XposedBridge.log("$TAG debug deep-link -> ${deepLink.data} to ${target.packageName}")
+                }
                 deepLink.setPackage(target.packageName)
                 deepLink.addFlags(flags)
                 try {
