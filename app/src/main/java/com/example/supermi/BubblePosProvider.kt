@@ -76,7 +76,7 @@ class BubblePosProvider : ContentProvider() {
         var defaultLenMax: Int = 18
 
         @Volatile
-        var maxLen: Int = 150
+        var maxLen: Int = BubblePrefs.DEFAULT_MAX_LEN
 
         @Volatile
         var iconSize: Int = BubblePrefs.DEFAULT_ICON_SIZE

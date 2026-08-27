@@ -64,11 +64,6 @@ class NumberRulesActivity : AppCompatActivity() {
         }
         list.adapter = adapter
         list.setOnItemClickListener { _, _, position, _ -> showEditDialog(position) }
-        list.setOnItemLongClickListener { _, _, position, _ ->
-            rules.removeAt(position)
-            save()
-            true
-        }
         findViewById<Button>(R.id.btn_add).setOnClickListener { showEditDialog(-1) }
         loadDefaultLen()
     }
@@ -185,7 +180,20 @@ class NumberRulesActivity : AppCompatActivity() {
             }
         }
 
-        dlg.findViewById<Button>(R.id.dlg_cancel).setOnClickListener { dlg.dismiss() }
+        dlg.findViewById<Button>(R.id.dlg_cancel).apply {
+            if (index >= 0) {
+                text = "删除"
+                setTextColor(getColor(R.color.white))
+                background = getDrawable(R.drawable.bg_btn_danger)
+                setOnClickListener {
+                    rules.removeAt(index)
+                    save()
+                    dlg.dismiss()
+                }
+            } else {
+                setOnClickListener { dlg.dismiss() }
+            }
+        }
         dlg.findViewById<Button>(R.id.dlg_save).setOnClickListener {
             if (saveRule()) dlg.dismiss()
         }

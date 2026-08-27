@@ -24,7 +24,7 @@
         android:layout_marginTop="14dp"
         android:layout_marginBottom="8dp"
         android:paddingStart="6dp"
-        android:text="号码规则 · 点击编辑 / 长按删除"
+        android:text="号码规则 · 点击编辑"
         android:textColor="@color/text_tertiary"
         android:textSize="12sp" />
 

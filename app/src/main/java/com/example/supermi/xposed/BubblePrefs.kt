@@ -17,7 +17,8 @@ object BubblePrefs {
     const val KEY_MAX_LEN = "supermi_max_len"
     const val DEFAULT_TOP_OFFSET = 30
     const val DEFAULT_X_OFFSET = 0
-    const val DEFAULT_MAX_LEN = 200
+    const val DEFAULT_MAX_LEN = 400
+    private val MAX_LEN_VALUES = (1..8).map { it * 100 }.toSet()
 
     private const val PROVIDER_URI = "content://com.example.supermi.bubblepos"
     private const val METHOD_GET = "get_config"
@@ -100,9 +101,10 @@ object BubblePrefs {
     }
 
     fun maxLen(ctx: Context?): Int {
-        config(ctx)?.getInt("max_len")?.takeIf { it > 0 }?.let { return it }
+        config(ctx)?.getInt("max_len")?.takeIf { it in MAX_LEN_VALUES }?.let { return it }
         val resolver = ctx?.contentResolver ?: return DEFAULT_MAX_LEN
         return Settings.System.getInt(resolver, KEY_MAX_LEN, DEFAULT_MAX_LEN)
+            .takeIf { it in MAX_LEN_VALUES } ?: DEFAULT_MAX_LEN
     }
 
     fun gap12(ctx: Context?, count: Int): Int {

@@ -28,4 +28,5 @@
     <!-- Misc -->
     <color name="switch_track_off">#FFD6DAE3</color>
     <color name="ok">#FF27AE60</color>
+    <color name="danger">#FFD64545</color>
 </resources>

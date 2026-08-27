@@ -1273,105 +1273,72 @@
                         android:textStyle="bold" />
 
                     <LinearLayout
-                        android:id="@+id/seg_max_len"
-                        android:layout_width="wrap_content"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="10dp"
-                        android:background="@drawable/bg_seg"
-                        android:orientation="horizontal"
-                        android:padding="3dp">
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
 
-                        <Button
-                            android:id="@+id/btn_len_50"
-                            android:layout_width="36dp"
-                            android:layout_height="30dp"
-                            android:background="@drawable/bg_seg_active"
-                            app:backgroundTint="@null"
-                            android:minWidth="0dp"
-                            android:minHeight="0dp"
-                            android:padding="0dp"
-                            android:stateListAnimator="@null"
-                            android:text="50"
-                            android:textColor="@color/blue_text"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
+                        <SeekBar
+                            android:id="@+id/seek_max_len"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingStart="16dp"
+                            android:paddingEnd="16dp"
+                            android:max="7"
+                            android:progress="3"
+                            android:tickMark="@drawable/seek_tick"
+                            android:tickMarkTint="@color/text_tertiary" />
 
-                        <Button
-                            android:id="@+id/btn_len_100"
-                            android:layout_width="36dp"
-                            android:layout_height="30dp"
-                            android:background="@android:color/transparent"
-                            app:backgroundTint="@null"
-                            android:minWidth="0dp"
-                            android:minHeight="0dp"
-                            android:padding="0dp"
-                            android:stateListAnimator="@null"
-                            android:text="100"
-                            android:textColor="@color/text_tertiary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
+                        <FrameLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="-4dp"
+                            android:clipChildren="false">
 
-                        <Button
-                            android:id="@+id/btn_len_150"
-                            android:layout_width="36dp"
-                            android:layout_height="30dp"
-                            android:background="@android:color/transparent"
-                            app:backgroundTint="@null"
-                            android:minWidth="0dp"
-                            android:minHeight="0dp"
-                            android:padding="0dp"
-                            android:stateListAnimator="@null"
-                            android:text="150"
-                            android:textColor="@color/text_tertiary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="start"
+                                android:layout_marginStart="7dp"
+                                android:includeFontPadding="false"
+                                android:text="100"
+                                android:textColor="@color/text_tertiary"
+                                android:textSize="10sp" />
 
-                        <Button
-                            android:id="@+id/btn_len_200"
-                            android:layout_width="36dp"
-                            android:layout_height="30dp"
-                            android:background="@android:color/transparent"
-                            app:backgroundTint="@null"
-                            android:minWidth="0dp"
-                            android:minHeight="0dp"
-                            android:padding="0dp"
-                            android:stateListAnimator="@null"
-                            android:text="200"
-                            android:textColor="@color/text_tertiary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="center_horizontal"
+                                android:includeFontPadding="false"
+                                android:text="400"
+                                android:textColor="@color/text_tertiary"
+                                android:textSize="10sp"
+                                android:translationX="-12dp" />
 
-                        <Button
-                            android:id="@+id/btn_len_250"
-                            android:layout_width="36dp"
-                            android:layout_height="30dp"
-                            android:background="@android:color/transparent"
-                            app:backgroundTint="@null"
-                            android:minWidth="0dp"
-                            android:minHeight="0dp"
-                            android:padding="0dp"
-                            android:stateListAnimator="@null"
-                            android:text="250"
-                            android:textColor="@color/text_tertiary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-
-                        <Button
-                            android:id="@+id/btn_len_400"
-                            android:layout_width="36dp"
-                            android:layout_height="30dp"
-                            android:background="@android:color/transparent"
-                            app:backgroundTint="@null"
-                            android:minWidth="0dp"
-                            android:minHeight="0dp"
-                            android:padding="0dp"
-                            android:stateListAnimator="@null"
-                            android:text="400"
-                            android:textColor="@color/text_tertiary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="end"
+                                android:layout_marginEnd="7dp"
+                                android:includeFontPadding="false"
+                                android:text="800"
+                                android:textColor="@color/text_tertiary"
+                                android:textSize="10sp" />
+                        </FrameLayout>
                     </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tv_max_len"
+                        android:layout_width="48dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:text="400"
+                        android:textColor="@color/blue_text"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
+
             </LinearLayout>
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>

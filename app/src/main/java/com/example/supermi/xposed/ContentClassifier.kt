@@ -16,7 +16,7 @@ object ContentClassifier {
     private val URL_FIND =
         Regex("""https?://[^\s"'<>]+|www\.[^\s"'<>]+""", RegexOption.IGNORE_CASE)
 
-    private val PHONE_FIND = Regex("""1[3-9]\d{9}""")
+    private val PHONE_FIND = Regex("""(?<![0-9A-Za-z])1[3-9]\d{9}(?![0-9A-Za-z])""")
 
     fun classifyAll(ctx: Context?, text: String): List<Recognized> {
         val t = text.trim()
@@ -48,7 +48,7 @@ object ContentClassifier {
         val num = NumberRuleStore.match(ctx, t)
         if (num != null) {
             result.add(Recognized(ContentType.PHONE, num.first, num.second))
-        } else {
+        } else if (NumberRuleStore.hasPhoneRule(ctx)) {
             PHONE_FIND.find(t)?.let { result.add(Recognized(ContentType.PHONE, it.value)) }
         }
 

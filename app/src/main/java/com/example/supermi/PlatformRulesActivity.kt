@@ -69,11 +69,6 @@ class PlatformRulesActivity : AppCompatActivity() {
         }
         list.adapter = adapter
         list.setOnItemClickListener { _, _, position, _ -> showEditDialog(position) }
-        list.setOnItemLongClickListener { _, _, position, _ ->
-            rules.removeAt(position)
-            save()
-            true
-        }
         findViewById<Button>(R.id.btn_add).setOnClickListener { showEditDialog(-1) }
     }
 
@@ -191,7 +186,20 @@ class PlatformRulesActivity : AppCompatActivity() {
         }
         dlg.findViewById<android.widget.CheckBox>(R.id.dlg_deeplink_cb).isChecked = pendingDeepLink
 
-        dlg.findViewById<Button>(R.id.dlg_cancel).setOnClickListener { dlg.dismiss() }
+        dlg.findViewById<Button>(R.id.dlg_cancel).apply {
+            if (index >= 0) {
+                text = "删除"
+                setTextColor(getColor(R.color.white))
+                background = getDrawable(R.drawable.bg_btn_danger)
+                setOnClickListener {
+                    rules.removeAt(index)
+                    save()
+                    dlg.dismiss()
+                }
+            } else {
+                setOnClickListener { dlg.dismiss() }
+            }
+        }
         dlg.findViewById<Button>(R.id.dlg_save).setOnClickListener {
             pendingDeepLink = dlg.findViewById<android.widget.CheckBox>(R.id.dlg_deeplink_cb).isChecked
             if (saveRule()) dlg.dismiss()

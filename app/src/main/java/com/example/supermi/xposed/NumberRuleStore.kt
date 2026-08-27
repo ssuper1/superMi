@@ -95,6 +95,15 @@ object NumberRuleStore {
         return Regex("(?<![0-9A-Za-z])(${parts.joinToString("|")})(?![0-9])")
     }
 
+    fun hasPhoneRule(ctx: Context?): Boolean {
+        val json = BubblePrefs.numberRulesJson(ctx)
+        val rules = if (json.isNullOrBlank()) DEFAULT_RULES else parse(json)
+        return rules.any { rule ->
+            rule.prefixes.any { it == "1" } &&
+                (rule.lengths.isEmpty() || rule.lengths.contains(11))
+        }
+    }
+
     fun match(ctx: Context?, text: String): Pair<String, List<String>>? {
         val json = BubblePrefs.numberRulesJson(ctx)
         val rules = if (json.isNullOrBlank()) DEFAULT_RULES else parse(json)

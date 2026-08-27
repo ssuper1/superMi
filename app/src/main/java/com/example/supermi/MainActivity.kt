@@ -30,7 +30,7 @@ import java.io.File
 class MainActivity : AppCompatActivity() {
 
     companion object {
-        private val MAX_LEN_VALUES = listOf(50, 100, 150, 200, 250, 400)
+        private val MAX_LEN_VALUES = (1..8).map { it * 100 }
     }
 
     private val wm: WindowManager by lazy {
@@ -152,13 +152,7 @@ class MainActivity : AppCompatActivity() {
             openExternal("https://github.com/ssuper1/superMi")
         }
 
-        findViewById<Button>(R.id.btn_len_50).setOnClickListener { setMaxLen(50) }
-        findViewById<Button>(R.id.btn_len_100).setOnClickListener { setMaxLen(100) }
-        findViewById<Button>(R.id.btn_len_150).setOnClickListener { setMaxLen(150) }
-        findViewById<Button>(R.id.btn_len_200).setOnClickListener { setMaxLen(200) }
-        findViewById<Button>(R.id.btn_len_250).setOnClickListener { setMaxLen(250) }
-        findViewById<Button>(R.id.btn_len_400).setOnClickListener { setMaxLen(400) }
-        updateMaxLenSeg()
+        setupMaxLenSeekBar()
 
         updateStepUi()
         updatePreviewSeg()
@@ -415,28 +409,29 @@ class MainActivity : AppCompatActivity() {
         updateStepUi()
     }
 
-    private fun setMaxLen(v: Int) {
-        maxLen = v
-        updateMaxLenSeg()
-        saveConfig()
-    }
+    private fun setupMaxLenSeekBar() {
+        val seek = findViewById<android.widget.SeekBar>(R.id.seek_max_len)
+        val label = findViewById<TextView>(R.id.tv_max_len)
+        val initial = (maxLen / 100).coerceIn(1, 8)
+        seek.max = 7
+        seek.progress = initial - 1
+        label.text = "${initial * 100}"
+        seek.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(
+                seekBar: android.widget.SeekBar?,
+                progress: Int,
+                fromUser: Boolean
+            ) {
+                val value = (progress + 1) * 100
+                maxLen = value
+                label.text = "$value"
+                if (fromUser) saveConfig()
+            }
 
-    private fun updateMaxLenSeg() {
-        val ids = mapOf(
-            50 to R.id.btn_len_50,
-            100 to R.id.btn_len_100,
-            150 to R.id.btn_len_150,
-            200 to R.id.btn_len_200,
-            250 to R.id.btn_len_250,
-            400 to R.id.btn_len_400
-        )
-        for ((v, id) in ids) {
-            val btn = findViewById<Button>(id)
-            val active = v == maxLen
-            btn.background = getDrawable(if (active) R.drawable.bg_seg_active else android.R.color.transparent)
-            btn.backgroundTintList = null
-            btn.setTextColor(resources.getColor(if (active) R.color.blue_text else R.color.text_tertiary, theme))
-        }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+        })
     }
 
     private fun updateStepUi() {
