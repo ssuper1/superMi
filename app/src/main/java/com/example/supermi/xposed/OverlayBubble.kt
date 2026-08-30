@@ -628,6 +628,9 @@ object OverlayBubble {
                 putExtra(SnapshotViewerActivity.EXTRA_ORIGIN_H, originH)
             }
             ctx.startActivity(intent)
+            // 查看器已拿到气泡原点坐标；启动成功后移除气泡，避免遮挡查看内容。
+            // 用 post 避免在当前 ImageView 点击分发过程中直接移除父窗口。
+            mainHandler.post { dismissSnapshot() }
         } catch (t: Throwable) {
             XposedBridge.log("$TAG openSnapshotViewer failed: $t")
         }
