@@ -14,6 +14,9 @@ class BubblePosProvider : ContentProvider() {
     companion object {
         const val AUTHORITY = "com.example.supermi.bubblepos"
         const val METHOD_GET = "get_config"
+        const val METHOD_DEBUG_LOG_APPEND = "debug_log_append"
+        const val METHOD_DEBUG_LOG_READ = "debug_log_read"
+        const val METHOD_DEBUG_LOG_CLEAR = "debug_log_clear"
         const val KEY_Y = "y"
         const val KEY_X = "x"
         const val KEY_ADDR_APP = "addr_app"
@@ -25,6 +28,7 @@ class BubblePosProvider : ContentProvider() {
         const val KEY_DEFAULT_LEN_MAX = "num_default_max"
         const val KEY_MAX_LEN = "max_len"
         const val KEY_DEBUG = "debug"
+        const val KEY_DEBUG_TOAST = "debug_toast"
         const val KEY_PREVIEW_ICONS = "preview_icons"
         const val KEY_GAP12 = "gap12"
         const val KEY_GAP23 = "gap23"
@@ -33,7 +37,17 @@ class BubblePosProvider : ContentProvider() {
         const val KEY_GAP23_3 = "gap23_3"
         const val KEY_ICON_SIZE = "icon_size"
         const val KEY_BG_ALPHA = "bg_alpha"
+        const val KEY_BG_LIGHT = "bg_light"
+        const val KEY_BG_BORDER = "bg_border"
         const val KEY_DISMISS_SECS = "dismiss_secs"
+        const val KEY_SNAPSHOT_MAX_COUNT = "snapshot_max_count"
+        const val KEY_SNAPSHOT_TTL_SECS = "snapshot_ttl_secs"
+        const val KEY_SNAPSHOT_AUTO_CLEAN = "snapshot_auto_clean"
+        const val KEY_SNAPSHOT_AUTO_CLOSE = "snapshot_auto_close"
+        const val KEY_SNAPSHOT_OPEN_SOURCE_CLOSE = "snapshot_open_source_close"
+        const val KEY_SNAPSHOT_BG_BLUR = "snapshot_bg_blur"
+        const val KEY_SNAPSHOT_CORNER_DP = "snapshot_corner_dp"
+        const val KEY_SNAPSHOT_DIR = "snapshot_dir"
         const val CONFIG_FILE = "supermi_config"
 
         @Volatile
@@ -94,10 +108,26 @@ class BubblePosProvider : ContentProvider() {
         var bgAlpha: Int = BubblePrefs.DEFAULT_BG_ALPHA
 
         @Volatile
+        var bgLight: Boolean = BubblePrefs.DEFAULT_BG_LIGHT
+
+        @Volatile
+        var bgBorder: Boolean = BubblePrefs.DEFAULT_BG_BORDER
+
+        @Volatile
         var dismissSecs: Int = BubblePrefs.DEFAULT_DISMISS_SECS
 
         @Volatile
         var debug: Boolean = false
+        @Volatile
+        var debugToast: Boolean = true
+        @Volatile var snapshotMaxCount: Int = 1
+        @Volatile var snapshotTtlSecs: Int = 60
+        @Volatile var snapshotAutoClean: Boolean = true
+        @Volatile var snapshotAutoClose: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_AUTO_CLOSE
+        @Volatile var snapshotOpenSourceClose: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE
+        @Volatile var snapshotBgBlur: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_BG_BLUR
+        @Volatile var snapshotCornerDp: Int = BubblePrefs.DEFAULT_SNAPSHOT_CORNER_DP
+        @Volatile var snapshotDir: String = BubblePrefs.DEFAULT_SNAPSHOT_DIR
     }
 
     override fun onCreate(): Boolean {
@@ -140,8 +170,19 @@ class BubblePosProvider : ContentProvider() {
                     }
                     KEY_GAP23 -> gap23_3 = v.toIntOrNull() ?: gap23_3
                     KEY_BG_ALPHA -> bgAlpha = v.toIntOrNull()?.coerceIn(0, 100) ?: bgAlpha
+                    KEY_BG_LIGHT -> bgLight = v != "0"
+                    KEY_BG_BORDER -> bgBorder = v != "0"
                     KEY_DISMISS_SECS -> dismissSecs = v.toIntOrNull()?.coerceIn(1, 10) ?: dismissSecs
                     KEY_DEBUG -> debug = v == "1"
+                    KEY_DEBUG_TOAST -> debugToast = v != "0"
+                    KEY_SNAPSHOT_MAX_COUNT -> snapshotMaxCount = v.toIntOrNull()?.coerceIn(1, 3) ?: snapshotMaxCount
+                    KEY_SNAPSHOT_TTL_SECS -> snapshotTtlSecs = v.toIntOrNull()?.coerceIn(15, 600) ?: snapshotTtlSecs
+                    KEY_SNAPSHOT_AUTO_CLEAN -> snapshotAutoClean = v != "0"
+                    KEY_SNAPSHOT_AUTO_CLOSE -> snapshotAutoClose = v != "0"
+                    KEY_SNAPSHOT_OPEN_SOURCE_CLOSE -> snapshotOpenSourceClose = v != "0"
+                    KEY_SNAPSHOT_BG_BLUR -> snapshotBgBlur = v != "0"
+                    KEY_SNAPSHOT_CORNER_DP -> snapshotCornerDp = v.toIntOrNull()?.coerceIn(BubblePrefs.SNAPSHOT_CORNER_MIN, BubblePrefs.SNAPSHOT_CORNER_MAX) ?: snapshotCornerDp
+                    KEY_SNAPSHOT_DIR -> snapshotDir = v
                 }
             }
         } catch (_: Throwable) {
@@ -149,6 +190,21 @@ class BubblePosProvider : ContentProvider() {
     }
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
+        if (method == METHOD_DEBUG_LOG_APPEND) {
+            val line = extras?.getString("line").orEmpty()
+            if (line.isNotEmpty()) synchronized(this) {
+                val prefs = context!!.getSharedPreferences("debug_logs", Context.MODE_PRIVATE)
+                prefs.edit().putString("log", (prefs.getString("log", "").orEmpty() + line + "\n").takeLast(24000)).apply()
+            }
+            return Bundle()
+        }
+        if (method == METHOD_DEBUG_LOG_READ) return Bundle().apply {
+            putString("log", context?.getSharedPreferences("debug_logs", Context.MODE_PRIVATE)?.getString("log", "").orEmpty())
+        }
+        if (method == METHOD_DEBUG_LOG_CLEAR) {
+            context?.getSharedPreferences("debug_logs", Context.MODE_PRIVATE)?.edit()?.remove("log")?.apply()
+            return Bundle()
+        }
         if (method != METHOD_GET) return null
         return Bundle().apply {
             putInt("y1", y1)
@@ -167,11 +223,22 @@ class BubblePosProvider : ContentProvider() {
             putInt(KEY_MAX_LEN, maxLen)
             putInt(KEY_ICON_SIZE, iconSize)
             putInt(KEY_BG_ALPHA, bgAlpha)
+            putBoolean(KEY_BG_LIGHT, bgLight)
+            putBoolean(KEY_BG_BORDER, bgBorder)
             putInt(KEY_DISMISS_SECS, dismissSecs)
             putInt(KEY_GAP12_2, gap12_2)
             putInt(KEY_GAP12_3, gap12_3)
             putInt(KEY_GAP23_3, gap23_3)
             putBoolean(KEY_DEBUG, debug)
+            putBoolean(KEY_DEBUG_TOAST, debugToast)
+            putInt(KEY_SNAPSHOT_MAX_COUNT, snapshotMaxCount)
+            putInt(KEY_SNAPSHOT_TTL_SECS, snapshotTtlSecs)
+            putBoolean(KEY_SNAPSHOT_AUTO_CLEAN, snapshotAutoClean)
+            putBoolean(KEY_SNAPSHOT_AUTO_CLOSE, snapshotAutoClose)
+            putBoolean(KEY_SNAPSHOT_OPEN_SOURCE_CLOSE, snapshotOpenSourceClose)
+            putBoolean(KEY_SNAPSHOT_BG_BLUR, snapshotBgBlur)
+            putInt(KEY_SNAPSHOT_CORNER_DP, snapshotCornerDp)
+            putString(KEY_SNAPSHOT_DIR, snapshotDir)
         }
     }
 

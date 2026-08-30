@@ -94,7 +94,9 @@
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/sw_system"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content"
+            app:thumbTint="@color/switch_thumb_tint"
+            app:trackTint="@color/switch_track_tint" />
     </LinearLayout>
 
     <!-- 最近选择 -->

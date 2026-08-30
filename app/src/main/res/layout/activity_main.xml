@@ -442,6 +442,59 @@
                         android:textStyle="bold" />
                 </LinearLayout>
 
+                <!-- 背景透明度 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginTop="2dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="背景透明度"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11.5sp"
+                        android:textStyle="bold" />
+
+                    <SeekBar
+                        android:id="@+id/seek_bg_alpha"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:layout_marginEnd="6dp"
+                        android:layout_weight="1"
+                        android:max="100" />
+
+                    <TextView
+                        android:id="@+id/tv_bg_alpha"
+                        android:layout_width="26dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:text="20"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11.5sp" />
+
+                    <Button
+                        android:id="@+id/btn_reset_bg_alpha"
+                        android:layout_width="34dp"
+                        android:layout_height="28dp"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/bg_btn_ghost"
+                        app:backgroundTint="@null"
+                        android:minWidth="0dp"
+                        android:minHeight="0dp"
+                        android:padding="0dp"
+                        android:stateListAnimator="@null"
+                        android:text="↻"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
                 <!-- 图标大小 -->
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -480,59 +533,6 @@
 
                     <Button
                         android:id="@+id/btn_reset_icon"
-                        android:layout_width="34dp"
-                        android:layout_height="28dp"
-                        android:layout_marginStart="4dp"
-                        android:background="@drawable/bg_btn_ghost"
-                        app:backgroundTint="@null"
-                        android:minWidth="0dp"
-                        android:minHeight="0dp"
-                        android:padding="0dp"
-                        android:stateListAnimator="@null"
-                        android:text="↻"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="13sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-
-                <!-- 背景透明度 -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:layout_marginEnd="16dp"
-                    android:layout_marginTop="2dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="背景透明度"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="11.5sp"
-                        android:textStyle="bold" />
-
-                    <SeekBar
-                        android:id="@+id/seek_bg_alpha"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="10dp"
-                        android:layout_marginEnd="6dp"
-                        android:layout_weight="1"
-                        android:max="100" />
-
-                    <TextView
-                        android:id="@+id/tv_bg_alpha"
-                        android:layout_width="26dp"
-                        android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:text="85"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="11.5sp" />
-
-                    <Button
-                        android:id="@+id/btn_reset_bg_alpha"
                         android:layout_width="34dp"
                         android:layout_height="28dp"
                         android:layout_marginStart="4dp"
@@ -599,6 +599,47 @@
                         android:textColor="@color/text_secondary"
                         android:textSize="13sp"
                         android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- 背景色 / 边框线 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginTop="2dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:layout_weight="1"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingEnd="4dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="背景色" android:textColor="@color/text_secondary" android:textSize="12sp" android:textStyle="bold" />
+                        <LinearLayout android:layout_width="wrap_content" android:layout_height="32dp" android:layout_marginStart="8dp" android:background="@drawable/bg_seg" android:orientation="horizontal" android:padding="3dp">
+                            <Button android:id="@+id/btn_bg_dark" android:layout_width="wrap_content" android:layout_height="match_parent" android:background="@drawable/bg_seg_active" app:backgroundTint="@null" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:paddingStart="10dp" android:paddingEnd="10dp" android:stateListAnimator="@null" android:text="黑" android:textColor="@color/blue_text" android:textSize="12sp" android:textStyle="bold" />
+                            <Button android:id="@+id/btn_bg_light" android:layout_width="wrap_content" android:layout_height="match_parent" android:background="@android:color/transparent" app:backgroundTint="@null" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:paddingStart="10dp" android:paddingEnd="10dp" android:stateListAnimator="@null" android:text="白" android:textColor="@color/text_tertiary" android:textSize="12sp" android:textStyle="bold" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="4dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="边框线" android:textColor="@color/text_secondary" android:textSize="12sp" android:textStyle="bold" />
+                        <LinearLayout android:layout_width="wrap_content" android:layout_height="32dp" android:layout_marginStart="8dp" android:background="@drawable/bg_seg" android:orientation="horizontal" android:padding="3dp">
+                            <Button android:id="@+id/btn_bg_border_on" android:layout_width="wrap_content" android:layout_height="match_parent" android:background="@drawable/bg_seg_active" app:backgroundTint="@null" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:paddingStart="10dp" android:paddingEnd="10dp" android:stateListAnimator="@null" android:text="有" android:textColor="@color/blue_text" android:textSize="12sp" android:textStyle="bold" />
+                            <Button android:id="@+id/btn_bg_border_off" android:layout_width="wrap_content" android:layout_height="match_parent" android:background="@android:color/transparent" app:backgroundTint="@null" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp" android:paddingStart="10dp" android:paddingEnd="10dp" android:stateListAnimator="@null" android:text="无" android:textColor="@color/text_tertiary" android:textSize="12sp" android:textStyle="bold" />
+                        </LinearLayout>
+                    </LinearLayout>
                 </LinearLayout>
 
                 <!-- 方向键 + 读数 -->
@@ -1021,6 +1062,545 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- ===== 截图暂存 ===== -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:layout_marginBottom="8dp"
+                android:paddingStart="6dp"
+                android:text="截图暂存"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card"
+                android:elevation="2dp"
+                android:orientation="vertical"
+                android:outlineProvider="background">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="13dp">
+
+                    <ImageView
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_icon_tile"
+                        android:backgroundTint="#1F16A34A"
+                        android:contentDescription="@null"
+                        android:padding="9dp"
+                        android:src="@drawable/ic_photo"
+                        android:tint="#FF16A34A" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="截图气泡"
+                            android:textColor="@color/text_primary"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="分享截图到本App后显示缩略气泡"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="11.5sp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="65dp"
+                    android:background="@color/divider" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_hint"
+                    android:lineSpacingExtra="3dp"
+                    android:padding="10dp"
+                    android:text="点击气泡查看大图。截图气泡位置与复制气泡中设置的相应图标个数位置相同；会自动退让复制气泡，过后复原。"
+                    android:textColor="@color/text_primary"
+                    android:textSize="12sp" />
+
+                <!-- 最多显示张数 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="最多显示张数"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:id="@+id/seg_snap"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_seg"
+                        android:orientation="horizontal"
+                        android:padding="3dp">
+
+                        <Button
+                            android:id="@+id/btn_snap_1"
+                            android:layout_width="36dp"
+                            android:layout_height="30dp"
+                            android:background="@drawable/bg_seg_active"
+                            app:backgroundTint="@null"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="0dp"
+                            android:stateListAnimator="@null"
+                            android:text="1"
+                            android:textColor="@color/blue_text"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btn_snap_2"
+                            android:layout_width="36dp"
+                            android:layout_height="30dp"
+                            android:background="@android:color/transparent"
+                            app:backgroundTint="@null"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="0dp"
+                            android:stateListAnimator="@null"
+                            android:text="2"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btn_snap_3"
+                            android:layout_width="36dp"
+                            android:layout_height="30dp"
+                            android:background="@android:color/transparent"
+                            app:backgroundTint="@null"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="0dp"
+                            android:stateListAnimator="@null"
+                            android:text="3"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- 关闭方式 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginTop="2dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="关闭方式"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:id="@+id/seg_snap_close"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_seg"
+                        android:orientation="horizontal"
+                        android:padding="3dp">
+
+                        <Button
+                            android:id="@+id/btn_snap_always"
+                            android:layout_width="wrap_content"
+                            android:layout_height="34dp"
+                            android:background="@drawable/bg_seg_active"
+                            app:backgroundTint="@null"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="0dp"
+                            android:paddingStart="10dp"
+                            android:paddingEnd="10dp"
+                            android:stateListAnimator="@null"
+                            android:text="一直开启"
+                            android:textColor="@color/blue_text"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btn_snap_timed"
+                            android:layout_width="wrap_content"
+                            android:layout_height="34dp"
+                            android:background="@android:color/transparent"
+                            app:backgroundTint="@null"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="0dp"
+                            android:paddingStart="10dp"
+                            android:paddingEnd="10dp"
+                            android:stateListAnimator="@null"
+                            android:text="定时关闭"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- 气泡停留时间 -->
+                <LinearLayout
+                    android:id="@+id/row_snap_ttl"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginTop="2dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="气泡停留时间"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11.5sp"
+                        android:textStyle="bold" />
+
+                    <SeekBar
+                        android:id="@+id/seek_snap_ttl"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:layout_marginEnd="6dp"
+                        android:layout_weight="1"
+                        android:max="6" />
+
+                    <TextView
+                        android:id="@+id/tv_snap_ttl"
+                        android:layout_width="42dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:text="60 秒"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11.5sp" />
+
+                    <Button
+                        android:id="@+id/btn_reset_snap_ttl"
+                        android:layout_width="34dp"
+                        android:layout_height="28dp"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/bg_btn_ghost"
+                        app:backgroundTint="@null"
+                        android:minWidth="0dp"
+                        android:minHeight="0dp"
+                        android:padding="0dp"
+                        android:stateListAnimator="@null"
+                        android:text="↻"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- 来源App返回后 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginTop="2dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="来源返回后"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:id="@+id/seg_snap_return"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_seg"
+                        android:orientation="horizontal"
+                        android:padding="3dp">
+
+                        <Button
+                            android:id="@+id/btn_snap_return_close"
+                            android:layout_width="wrap_content"
+                            android:layout_height="34dp"
+                            android:background="@drawable/bg_seg_active"
+                            app:backgroundTint="@null"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="0dp"
+                            android:paddingStart="10dp"
+                            android:paddingEnd="10dp"
+                            android:stateListAnimator="@null"
+                            android:text="关闭查看框"
+                            android:textColor="@color/blue_text"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btn_snap_return_viewer"
+                            android:layout_width="wrap_content"
+                            android:layout_height="34dp"
+                            android:background="@android:color/transparent"
+                            app:backgroundTint="@null"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="0dp"
+                            android:paddingStart="10dp"
+                            android:paddingEnd="10dp"
+                            android:stateListAnimator="@null"
+                            android:text="回到查看框"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- 查看框背景 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginTop="2dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="查看框背景"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_seg"
+                        android:orientation="horizontal"
+                        android:padding="3dp">
+
+                        <Button
+                            android:id="@+id/btn_snap_bg_normal"
+                            android:layout_width="wrap_content"
+                            android:layout_height="34dp"
+                            android:background="@android:color/transparent"
+                            app:backgroundTint="@null"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="0dp"
+                            android:paddingStart="10dp"
+                            android:paddingEnd="10dp"
+                            android:stateListAnimator="@null"
+                            android:text="普通"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btn_snap_bg_blur"
+                            android:layout_width="wrap_content"
+                            android:layout_height="34dp"
+                            android:background="@drawable/bg_seg_active"
+                            app:backgroundTint="@null"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="0dp"
+                            android:paddingStart="10dp"
+                            android:paddingEnd="10dp"
+                            android:stateListAnimator="@null"
+                            android:text="模糊"
+                            android:textColor="@color/blue_text"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- 超过上限清理 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginTop="4dp"
+                    android:layout_marginBottom="2dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="自动删除相册原图"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="仅删除截图，其他路径分享到气泡不删除"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/sw_snap_auto_clean"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        app:thumbTint="@color/switch_thumb_tint"
+                        app:trackTint="@color/switch_track_tint" />
+                </LinearLayout>
+
+                <!-- 系统截屏目录 -->
+                <LinearLayout
+                    android:id="@+id/row_snap_dir"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="2dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="12dp"
+                    android:paddingTop="7dp"
+                    android:paddingBottom="1dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="系统截屏目录"
+                            android:textColor="@color/text_primary"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tv_snap_dir_desc"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="自动检测"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="11.5sp" />
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_chevron_right"
+                        android:tint="@color/text_tertiary" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:background="@color/divider" />
+
+                <!-- 查看框圆角 -->
+                <LinearLayout
+                    android:id="@+id/row_snap_corner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="12dp"
+                    android:paddingTop="7dp"
+                    android:paddingBottom="1dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="查看框圆角"
+                            android:textColor="@color/text_primary"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tv_snap_corner_desc"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="当前 12 dp"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="11.5sp" />
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_chevron_right"
+                        android:tint="@color/text_tertiary" />
+                </LinearLayout>
+            </LinearLayout>
+
             <!-- ===== 其他 ===== -->
             <TextView
                 android:layout_width="wrap_content"
@@ -1034,6 +1614,7 @@
                 android:textStyle="bold" />
 
             <LinearLayout
+                android:id="@+id/row_debug"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_card"
@@ -1054,10 +1635,14 @@
                     android:tint="#FF6B7280" />
 
                 <LinearLayout
+                    android:id="@+id/debug_entry"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="12dp"
                     android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
                     android:orientation="vertical">
 
                     <TextView
@@ -1072,7 +1657,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="显示识别日志浮窗"
+                        android:text="点击进入详情页面"
                         android:textColor="@color/text_tertiary"
                         android:textSize="11.5sp" />
                 </LinearLayout>
@@ -1080,7 +1665,9 @@
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/sw_debug"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
+                    android:layout_height="wrap_content"
+                    app:thumbTint="@color/switch_thumb_tint"
+                    app:trackTint="@color/switch_track_tint" />
             </LinearLayout>
 
             <LinearLayout

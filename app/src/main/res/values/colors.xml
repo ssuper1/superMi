@@ -18,6 +18,7 @@
     <color name="page_bg">#FFF4F5FA</color>
     <color name="card_bg">#FFFFFFFF</color>
     <color name="seg_bg">#FFF0F2F8</color>
+    <color name="viewer_bg">#FF111111</color>
 
     <!-- Text -->
     <color name="text_primary">#FF1F2430</color>

@@ -7,4 +7,18 @@
     </style>
 
     <style name="Theme.SuperMi" parent="Base.Theme.SuperMi" />
+    <style name="Theme.SuperMi.Transparent" parent="Theme.SuperMi">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+
+    <!-- 截图查看器：透明窗口从气泡位置展开，背景/状态栏颜色由页面自己淡入 -->
+    <style name="Theme.SuperMi.Viewer" parent="Theme.SuperMi.Transparent">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
 </resources>

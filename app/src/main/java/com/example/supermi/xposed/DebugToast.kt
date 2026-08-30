@@ -16,13 +16,19 @@ object DebugToast {
     private val handler = Handler(Looper.getMainLooper())
 
     fun refreshDebug() {
-        debug = BubblePrefs.debugEnabled(SystemContextHolder.context())
+        BubblePrefs.executor.execute {
+            debug = BubblePrefs.debugEnabled(SystemContextHolder.context())
+        }
     }
 
     fun isDebug(): Boolean = debug
 
     fun log(msg: String) {
-        if (debug) XposedBridge.log("$TAG: $msg")
+        if (debug) {
+            val line = "$TAG: $msg"
+            XposedBridge.log(line)
+            DebugLogStore.append(systemContext(), line)
+        }
     }
 
     fun log(msg: String, t: Throwable) {
@@ -30,13 +36,16 @@ object DebugToast {
     }
 
     fun show(ctx: Context, msg: String) {
-        log(msg)
-        if (!debug) return
-        handler.post {
-            try {
-                Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
-            } catch (t: Throwable) {
-                log("toast failed", t)
+        BubblePrefs.executor.execute {
+            val enabled = debug && BubblePrefs.debugToastEnabled(ctx)
+            if (enabled) {
+                handler.post {
+                    try {
+                        Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
+                    } catch (t: Throwable) {
+                        XposedBridge.log("$TAG: toast failed: $t")
+                    }
+                }
             }
         }
     }

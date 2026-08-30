@@ -7,8 +7,13 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
+import android.os.Handler
+import android.os.Looper
+import android.provider.DocumentsContract
 import android.provider.Settings
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
@@ -26,11 +31,24 @@ import com.example.supermi.xposed.BubblePrefs
 import com.example.supermi.xposed.NumberRuleStore
 import com.example.supermi.xposed.PlatformRuleStore
 import java.io.File
+import java.net.URLDecoder
 
 class MainActivity : AppCompatActivity() {
 
     companion object {
         private val MAX_LEN_VALUES = (1..8).map { it * 100 }
+        private val SNAPSHOT_TTL_PRESETS = intArrayOf(15, 30, 60, 120, 180, 300, 600)
+        private const val REPEAT_DELAY_MS = 220L
+        private const val REPEAT_INTERVAL_MS = 80L
+    }
+
+    private val repeatHandler = Handler(Looper.getMainLooper())
+    private var repeatAction: (() -> Unit)? = null
+    private val repeatTick = object : Runnable {
+        override fun run() {
+            repeatAction?.invoke()
+            repeatHandler.postDelayed(this, REPEAT_INTERVAL_MS)
+        }
     }
 
     private val wm: WindowManager by lazy {
@@ -52,7 +70,17 @@ class MainActivity : AppCompatActivity() {
     private var gap23_3: Int = 6
     private var iconSize: Int = BubblePrefs.DEFAULT_ICON_SIZE
     private var bgAlpha: Int = BubblePrefs.DEFAULT_BG_ALPHA
+    private var bgLight: Boolean = BubblePrefs.DEFAULT_BG_LIGHT
+    private var bgBorder: Boolean = BubblePrefs.DEFAULT_BG_BORDER
     private var dismissSecs: Int = BubblePrefs.DEFAULT_DISMISS_SECS
+    private var snapshotMaxCount: Int = BubblePrefs.DEFAULT_SNAPSHOT_MAX_COUNT
+    private var snapshotTtlSecs: Int = BubblePrefs.DEFAULT_SNAPSHOT_TTL_SECS
+    private var snapshotAutoClean: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_AUTO_CLEAN
+    private var snapshotAutoClose: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_AUTO_CLOSE
+    private var snapshotOpenSourceClose: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE
+    private var snapshotCornerDp: Int = BubblePrefs.DEFAULT_SNAPSHOT_CORNER_DP
+    private var snapshotBgBlur: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_BG_BLUR
+    private var snapshotDir: String = BubblePrefs.DEFAULT_SNAPSHOT_DIR
     private var pendingType: String = BubblePosProvider.KEY_ADDR_APP
 
     private val exportLauncher = registerForActivityResult(
@@ -89,6 +117,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val snapDirTreeLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri == null) return@registerForActivityResult
+        val dir = physicalDirFromTreeUri(uri)
+        if (dir == null) {
+            Toast.makeText(this, "未识别到该目录的存储路径，请改选内置存储中的目录", Toast.LENGTH_LONG).show()
+            return@registerForActivityResult
+        }
+        snapshotDir = dir
+        saveConfig()
+        updateSnapshotDirEntry()
+        Toast.makeText(this, "已设置截屏目录：$dir", Toast.LENGTH_SHORT).show()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -104,10 +147,10 @@ class MainActivity : AppCompatActivity() {
         loadConfig()
 
         findViewById<Button>(R.id.btn_show).setOnClickListener { togglePreview() }
-        findViewById<Button>(R.id.btn_up).setOnClickListener { moveY(-step) }
-        findViewById<Button>(R.id.btn_down).setOnClickListener { moveY(step) }
-        findViewById<Button>(R.id.btn_left).setOnClickListener { moveX(-step) }
-        findViewById<Button>(R.id.btn_right).setOnClickListener { moveX(step) }
+        setupRepeatDirectionButton(R.id.btn_up) { moveY(-step) }
+        setupRepeatDirectionButton(R.id.btn_down) { moveY(step) }
+        setupRepeatDirectionButton(R.id.btn_left) { moveX(-step) }
+        setupRepeatDirectionButton(R.id.btn_right) { moveX(step) }
         findViewById<Button>(R.id.btn_reset2).setOnClickListener { resetOffset() }
 
         findViewById<Button>(R.id.btn_step_1).setOnClickListener { setStep(1) }
@@ -117,6 +160,10 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_preview_1).setOnClickListener { setPreviewCount(1) }
         findViewById<Button>(R.id.btn_preview_2).setOnClickListener { setPreviewCount(2) }
         findViewById<Button>(R.id.btn_preview_3).setOnClickListener { setPreviewCount(3) }
+
+        findViewById<Button>(R.id.btn_snap_1).setOnClickListener { setSnapshotMaxCount(1) }
+        findViewById<Button>(R.id.btn_snap_2).setOnClickListener { setSnapshotMaxCount(2) }
+        findViewById<Button>(R.id.btn_snap_3).setOnClickListener { setSnapshotMaxCount(3) }
 
         findViewById<View>(R.id.row_addr).setOnClickListener { launchPicker(BubblePosProvider.KEY_ADDR_APP) }
         findViewById<View>(R.id.row_url).setOnClickListener { launchPicker(BubblePosProvider.KEY_URL_APP) }
@@ -134,6 +181,9 @@ class MainActivity : AppCompatActivity() {
                 debugEnabled = checked
                 saveConfig()
             }
+        }
+        findViewById<View>(R.id.debug_entry).setOnClickListener {
+            startActivity(Intent(this, DebugDetailsActivity::class.java))
         }
 
         findViewById<View>(R.id.row_export).setOnClickListener { exportConfig() }
@@ -160,6 +210,12 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_reset_icon).setOnClickListener {
             setIconSize(BubblePrefs.DEFAULT_ICON_SIZE)
         }
+        updateBgColorSeg()
+        findViewById<Button>(R.id.btn_bg_dark).setOnClickListener { setBgLight(false) }
+        findViewById<Button>(R.id.btn_bg_light).setOnClickListener { setBgLight(true) }
+        updateBgBorderSeg()
+        findViewById<Button>(R.id.btn_bg_border_off).setOnClickListener { setBgBorder(false) }
+        findViewById<Button>(R.id.btn_bg_border_on).setOnClickListener { setBgBorder(true) }
         setupBgAlphaSeekBar(R.id.seek_bg_alpha, R.id.tv_bg_alpha, bgAlpha) { bgAlpha = it }
         findViewById<Button>(R.id.btn_reset_bg_alpha).setOnClickListener {
             setBgAlpha(BubblePrefs.DEFAULT_BG_ALPHA)
@@ -168,6 +224,33 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_reset_dismiss).setOnClickListener {
             setDismissSecs(BubblePrefs.DEFAULT_DISMISS_SECS)
         }
+        updateSnapshotSeg()
+        setupSnapshotTtlSeekBar(R.id.seek_snap_ttl, R.id.tv_snap_ttl, snapshotTtlSecs) { snapshotTtlSecs = it }
+        findViewById<Button>(R.id.btn_reset_snap_ttl).setOnClickListener {
+            setSnapshotTtlSecs(BubblePrefs.DEFAULT_SNAPSHOT_TTL_SECS)
+        }
+        updateSnapshotCloseSeg()
+        findViewById<Button>(R.id.btn_snap_always).setOnClickListener { setSnapshotAutoClose(false) }
+        findViewById<Button>(R.id.btn_snap_timed).setOnClickListener { setSnapshotAutoClose(true) }
+        applySnapshotCloseUi()
+        updateSnapshotOpenSourceSeg()
+        findViewById<Button>(R.id.btn_snap_return_close).setOnClickListener { setSnapshotOpenSourceReturnClose(true) }
+        findViewById<Button>(R.id.btn_snap_return_viewer).setOnClickListener { setSnapshotOpenSourceReturnClose(false) }
+        updateSnapshotBgSeg()
+        findViewById<Button>(R.id.btn_snap_bg_normal).setOnClickListener { setSnapshotBgBlur(false) }
+        findViewById<Button>(R.id.btn_snap_bg_blur).setOnClickListener { setSnapshotBgBlur(true) }
+        findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.sw_snap_auto_clean).apply {
+            isSaveEnabled = false
+            isChecked = snapshotAutoClean
+            setOnCheckedChangeListener { _, checked ->
+                snapshotAutoClean = checked
+                saveConfig()
+            }
+        }
+        findViewById<View>(R.id.row_snap_corner).setOnClickListener {
+            startActivity(Intent(this, SnapshotCornerActivity::class.java))
+        }
+        findViewById<View>(R.id.row_snap_dir).setOnClickListener { snapDirTreeLauncher.launch(null) }
         findViewById<android.widget.SeekBar>(R.id.seek_gap12).setOnSeekBarChangeListener(gapListener(1))
         findViewById<android.widget.SeekBar>(R.id.seek_gap23).setOnSeekBarChangeListener(gapListener(2))
         findViewById<Button>(R.id.btn_reset_gap12).setOnClickListener { setGap(1, 6) }
@@ -175,7 +258,15 @@ class MainActivity : AppCompatActivity() {
         updateGapUI()
         updateOffsetLabel()
         updateAppLabels()
+        refreshSnapshotCornerEntry()
+        updateSnapshotDirEntry()
         ensureOverlayPermission()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        snapshotCornerDp = BubblePosProvider.snapshotCornerDp
+        refreshSnapshotCornerEntry()
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
@@ -285,13 +376,14 @@ class MainActivity : AppCompatActivity() {
                 if (!fromUser) return
                 tv.text = "$progress"
                 update(progress)
-                saveConfig()
-                refreshPreview()
+                updatePreviewBackground()
             }
 
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
 
-            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {
+                saveConfig()
+            }
         })
     }
 
@@ -301,7 +393,58 @@ class MainActivity : AppCompatActivity() {
         findViewById<android.widget.SeekBar>(R.id.seek_bg_alpha).progress = v
         findViewById<TextView>(R.id.tv_bg_alpha).text = "$v"
         saveConfig()
+        updatePreviewBackground()
+    }
+
+    /** 透明度变化只更新现有 Drawable，避免拖动时反复 remove/add 悬浮窗。 */
+    private fun updatePreviewBackground() {
+        val drawable = previewView?.background as? GradientDrawable ?: return
+        val a = bgAlpha * 255 / 100
+        val rgb = if (bgLight) 0xFF else 0x3C
+        drawable.setColor(Color.argb(a, rgb, rgb, rgb))
+        previewView?.invalidate()
+    }
+
+    private fun setBgLight(value: Boolean) {
+        bgLight = value
+        updateBgColorSeg()
+        saveConfig()
         refreshPreview()
+    }
+
+    private fun updateBgColorSeg() {
+        val ids = mapOf(
+            false to R.id.btn_bg_dark,
+            true to R.id.btn_bg_light
+        )
+        for ((v, id) in ids) {
+            val btn = findViewById<Button>(id)
+            val active = v == bgLight
+            btn.background = getDrawable(if (active) R.drawable.bg_seg_active else android.R.color.transparent)
+            btn.backgroundTintList = null
+            btn.setTextColor(resources.getColor(if (active) R.color.blue_text else R.color.text_tertiary, theme))
+        }
+    }
+
+    private fun setBgBorder(value: Boolean) {
+        bgBorder = value
+        updateBgBorderSeg()
+        saveConfig()
+        refreshPreview()
+    }
+
+    private fun updateBgBorderSeg() {
+        val ids = mapOf(
+            false to R.id.btn_bg_border_off,
+            true to R.id.btn_bg_border_on
+        )
+        for ((v, id) in ids) {
+            val btn = findViewById<Button>(id)
+            val active = v == bgBorder
+            btn.background = getDrawable(if (active) R.drawable.bg_seg_active else android.R.color.transparent)
+            btn.backgroundTintList = null
+            btn.setTextColor(resources.getColor(if (active) R.color.blue_text else R.color.text_tertiary, theme))
+        }
     }
 
     private fun setupDismissSeekBar(
@@ -337,6 +480,150 @@ class MainActivity : AppCompatActivity() {
         findViewById<android.widget.SeekBar>(R.id.seek_dismiss).progress = v - 1
         findViewById<TextView>(R.id.tv_dismiss).text = "${v}s"
         saveConfig()
+    }
+
+    private fun setSnapshotMaxCount(c: Int) {
+        snapshotMaxCount = c.coerceIn(1, 3)
+        updateSnapshotSeg()
+        saveConfig()
+    }
+
+    private fun updateSnapshotSeg() {
+        val ids = mapOf(
+            1 to R.id.btn_snap_1,
+            2 to R.id.btn_snap_2,
+            3 to R.id.btn_snap_3
+        )
+        for ((v, id) in ids) {
+            val btn = findViewById<Button>(id)
+            val active = v == snapshotMaxCount
+            btn.background = getDrawable(if (active) R.drawable.bg_seg_active else android.R.color.transparent)
+            btn.backgroundTintList = null
+            btn.setTextColor(resources.getColor(if (active) R.color.blue_text else R.color.text_tertiary, theme))
+        }
+    }
+
+    private fun setSnapshotAutoClose(value: Boolean) {
+        snapshotAutoClose = value
+        updateSnapshotCloseSeg()
+        applySnapshotCloseUi()
+        saveConfig()
+    }
+
+    private fun setSnapshotOpenSourceReturnClose(value: Boolean) {
+        snapshotOpenSourceClose = value
+        updateSnapshotOpenSourceSeg()
+        saveConfig()
+    }
+
+    /** 更新「来源返回后」分段按钮的选中样式。 */
+    private fun updateSnapshotOpenSourceSeg() {
+        val ids = mapOf(
+            true to R.id.btn_snap_return_close,
+            false to R.id.btn_snap_return_viewer
+        )
+        for ((v, id) in ids) {
+            val btn = findViewById<Button>(id)
+            val active = v == snapshotOpenSourceClose
+            btn.background = getDrawable(if (active) R.drawable.bg_seg_active else android.R.color.transparent)
+            btn.backgroundTintList = null
+            btn.setTextColor(resources.getColor(if (active) R.color.blue_text else R.color.text_tertiary, theme))
+        }
+    }
+
+    /** 更新「查看框背景」分段按钮的选中样式。 */
+    private fun updateSnapshotBgSeg() {
+        val ids = mapOf(
+            false to R.id.btn_snap_bg_normal,
+            true to R.id.btn_snap_bg_blur
+        )
+        for ((v, id) in ids) {
+            val btn = findViewById<Button>(id)
+            val active = v == snapshotBgBlur
+            btn.background = getDrawable(if (active) R.drawable.bg_seg_active else android.R.color.transparent)
+            btn.backgroundTintList = null
+            btn.setTextColor(resources.getColor(if (active) R.color.blue_text else R.color.text_tertiary, theme))
+        }
+    }
+
+    private fun setSnapshotBgBlur(value: Boolean) {
+        snapshotBgBlur = value
+        updateSnapshotBgSeg()
+        saveConfig()
+    }
+
+    /** 更新关闭方式分段按钮的选中样式。 */
+    private fun updateSnapshotCloseSeg() {
+        val ids = mapOf(
+            false to R.id.btn_snap_always,
+            true to R.id.btn_snap_timed
+        )
+        for ((v, id) in ids) {
+            val btn = findViewById<Button>(id)
+            val active = v == snapshotAutoClose
+            btn.background = getDrawable(if (active) R.drawable.bg_seg_active else android.R.color.transparent)
+            btn.backgroundTintList = null
+            btn.setTextColor(resources.getColor(if (active) R.color.blue_text else R.color.text_tertiary, theme))
+        }
+    }
+
+    /** 定时关闭关闭时，TTL 相关控件置灰。 */
+    private fun applySnapshotCloseUi() {
+        val enabled = snapshotAutoClose
+        findViewById<View>(R.id.row_snap_ttl).alpha = if (enabled) 1f else 0.4f
+        findViewById<android.widget.SeekBar>(R.id.seek_snap_ttl).isEnabled = enabled
+        findViewById<View>(R.id.btn_reset_snap_ttl).isEnabled = enabled
+    }
+
+    private fun setupSnapshotTtlSeekBar(
+        seekId: Int,
+        tvId: Int,
+        initial: Int,
+        update: (Int) -> Unit
+    ) {
+        val seek = findViewById<android.widget.SeekBar>(seekId)
+        val tv = findViewById<TextView>(tvId)
+        seek.isSaveEnabled = false
+        seek.max = SNAPSHOT_TTL_PRESETS.size - 1
+        val idx = SNAPSHOT_TTL_PRESETS.indexOf(initial).let { if (it < 0) closestIndex(initial) else it }
+        seek.progress = idx
+        tv.text = "${SNAPSHOT_TTL_PRESETS[idx]} 秒"
+        seek.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                if (!fromUser) return
+                val v = SNAPSHOT_TTL_PRESETS[progress.coerceIn(0, SNAPSHOT_TTL_PRESETS.size - 1)]
+                tv.text = "$v 秒"
+                update(v)
+                saveConfig()
+            }
+
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+        })
+    }
+
+    private fun setSnapshotTtlSecs(value: Int) {
+        val v = value.coerceIn(15, 600)
+        snapshotTtlSecs = v
+        val seek = findViewById<android.widget.SeekBar>(R.id.seek_snap_ttl)
+        val idx = SNAPSHOT_TTL_PRESETS.indexOf(v).let { if (it < 0) closestIndex(v) else it }
+        seek.progress = idx
+        findViewById<TextView>(R.id.tv_snap_ttl).text = "${SNAPSHOT_TTL_PRESETS[idx]} 秒"
+        saveConfig()
+    }
+
+    private fun closestIndex(value: Int): Int {
+        var best = 0
+        var bestDiff = Int.MAX_VALUE
+        for ((i, p) in SNAPSHOT_TTL_PRESETS.withIndex()) {
+            val d = kotlin.math.abs(p - value)
+            if (d < bestDiff) {
+                bestDiff = d
+                best = i
+            }
+        }
+        return best
     }
 
     private fun refreshPreview() {
@@ -469,6 +756,38 @@ class MainActivity : AppCompatActivity() {
             "浏览器 App：" + (appLabels(urlAppPkg) ?: "自动")
     }
 
+    private fun refreshSnapshotCornerEntry() {
+        findViewById<TextView>(R.id.tv_snap_corner_desc).text = "当前 $snapshotCornerDp dp"
+    }
+
+    private fun updateSnapshotDirEntry() {
+        val desc = findViewById<TextView>(R.id.tv_snap_dir_desc)
+        val manual = snapshotDir.trim()
+        desc.text = if (manual.isEmpty()) {
+            "未设置，点击选择截屏目录"
+        } else {
+            "目录：$manual"
+        }
+    }
+
+    /** SAF 目录选择器返回的 tree uri 转物理路径：primary:DCIM/Screenshots -> /storage/emulated/0/DCIM/Screenshots。 */
+    private fun physicalDirFromTreeUri(uri: Uri): String? {
+        return try {
+            val docId = DocumentsContract.getTreeDocumentId(uri) ?: return null
+            val decoded = URLDecoder.decode(docId, "UTF-8")
+            val volume = decoded.substringBefore(':', "primary")
+            val relative = decoded.substringAfter(':', "").trim('/')
+            val root = when {
+                volume == "primary" -> Environment.getExternalStorageDirectory().absolutePath
+                else -> "/storage/$volume"
+            }
+            if (relative.isEmpty()) null else "$root/$relative"
+        }
+        catch (_: Throwable) {
+            null
+        }
+    }
+
     private fun appLabels(pkgs: String): String? {
         if (pkgs.isEmpty()) return null
         val parts = pkgs.split(",").map { it.trim() }.filter { it.isNotEmpty() }
@@ -554,6 +873,29 @@ class MainActivity : AppCompatActivity() {
         applyOffset()
     }
 
+    private fun setupRepeatDirectionButton(buttonId: Int, action: () -> Unit) {
+        findViewById<Button>(buttonId).setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    repeatAction = action
+                    action()
+                    repeatHandler.postDelayed(repeatTick, REPEAT_DELAY_MS)
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    stopRepeatMove()
+                    true
+                }
+                else -> true
+            }
+        }
+    }
+
+    private fun stopRepeatMove() {
+        repeatAction = null
+        repeatHandler.removeCallbacks(repeatTick)
+    }
+
     private fun applyOffset() {
         saveConfig()
         updateOffsetLabel()
@@ -637,8 +979,48 @@ class MainActivity : AppCompatActivity() {
             ?: fromSettings("icon_size", iconSize)
         bgAlpha = m[BubblePosProvider.KEY_BG_ALPHA]?.toIntOrNull()?.coerceIn(0, 100)
             ?: fromSettings("bg_alpha", bgAlpha)
+        bgLight = if (m.containsKey(BubblePosProvider.KEY_BG_LIGHT)) {
+            m[BubblePosProvider.KEY_BG_LIGHT] != "0"
+        } else {
+            fromSettings("bg_light", if (bgLight) 1 else 0) == 1
+        }
+        bgBorder = if (m.containsKey(BubblePosProvider.KEY_BG_BORDER)) {
+            m[BubblePosProvider.KEY_BG_BORDER] != "0"
+        } else {
+            fromSettings("bg_border", if (bgBorder) 1 else 0) == 1
+        }
         dismissSecs = m[BubblePosProvider.KEY_DISMISS_SECS]?.toIntOrNull()?.coerceIn(1, 10)
             ?: fromSettings("dismiss_secs", dismissSecs)
+        snapshotMaxCount = m[BubblePosProvider.KEY_SNAPSHOT_MAX_COUNT]?.toIntOrNull()?.coerceIn(1, 3)
+            ?: fromSettings("snapshot_max_count", snapshotMaxCount)
+        snapshotTtlSecs = m[BubblePosProvider.KEY_SNAPSHOT_TTL_SECS]?.toIntOrNull()?.coerceIn(15, 600)
+            ?: fromSettings("snapshot_ttl_secs", snapshotTtlSecs)
+        snapshotAutoClean = if (m.containsKey(BubblePosProvider.KEY_SNAPSHOT_AUTO_CLEAN)) {
+            m[BubblePosProvider.KEY_SNAPSHOT_AUTO_CLEAN] != "0"
+        } else {
+            fromSettings("snapshot_auto_clean", if (snapshotAutoClean) 1 else 0) == 1
+        }
+        snapshotAutoClose = if (m.containsKey(BubblePosProvider.KEY_SNAPSHOT_AUTO_CLOSE)) {
+            m[BubblePosProvider.KEY_SNAPSHOT_AUTO_CLOSE] != "0"
+        } else {
+            fromSettings("snapshot_auto_close", if (snapshotAutoClose) 1 else 0) == 1
+        }
+        snapshotOpenSourceClose = if (m.containsKey(BubblePosProvider.KEY_SNAPSHOT_OPEN_SOURCE_CLOSE)) {
+            m[BubblePosProvider.KEY_SNAPSHOT_OPEN_SOURCE_CLOSE] != "0"
+        } else {
+            fromSettings("snapshot_open_source_close", if (snapshotOpenSourceClose) 1 else 0) == 1
+        }
+        snapshotBgBlur = if (m.containsKey(BubblePosProvider.KEY_SNAPSHOT_BG_BLUR)) {
+            m[BubblePosProvider.KEY_SNAPSHOT_BG_BLUR] != "0"
+        } else {
+            fromSettings("snapshot_bg_blur", if (snapshotBgBlur) 1 else 0) == 1
+        }
+        snapshotCornerDp = m[BubblePosProvider.KEY_SNAPSHOT_CORNER_DP]?.toIntOrNull()
+            ?.coerceIn(BubblePrefs.SNAPSHOT_CORNER_MIN, BubblePrefs.SNAPSHOT_CORNER_MAX)
+            ?: fromSettings("snapshot_corner_dp", snapshotCornerDp)
+        snapshotDir = m[BubblePosProvider.KEY_SNAPSHOT_DIR]
+            ?: fromSettingsString("snapshot_dir")
+            ?: snapshotDir
         BubblePosProvider.platformRulesJson = m[PlatformRuleStore.KEY_PLATFORM_RULES]
             ?: fromSettingsString(PlatformRuleStore.KEY_PLATFORM_RULES)
             ?: PlatformRuleStore.toJson(PlatformRuleStore.DEFAULT_RULES)
@@ -661,7 +1043,17 @@ class MainActivity : AppCompatActivity() {
         BubblePosProvider.maxLen = maxLen
         BubblePosProvider.iconSize = iconSize
         BubblePosProvider.bgAlpha = bgAlpha
+        BubblePosProvider.bgLight = bgLight
+        BubblePosProvider.bgBorder = bgBorder
         BubblePosProvider.dismissSecs = dismissSecs
+        BubblePosProvider.snapshotMaxCount = snapshotMaxCount
+        BubblePosProvider.snapshotTtlSecs = snapshotTtlSecs
+        BubblePosProvider.snapshotAutoClean = snapshotAutoClean
+        BubblePosProvider.snapshotAutoClose = snapshotAutoClose
+        BubblePosProvider.snapshotOpenSourceClose = snapshotOpenSourceClose
+        BubblePosProvider.snapshotBgBlur = snapshotBgBlur
+        BubblePosProvider.snapshotCornerDp = snapshotCornerDp
+        BubblePosProvider.snapshotDir = snapshotDir
         BubblePosProvider.gap12_2 = gap12_2
         BubblePosProvider.gap12_3 = gap12_3
         BubblePosProvider.gap23_3 = gap23_3
@@ -687,7 +1079,17 @@ class MainActivity : AppCompatActivity() {
         m[BubblePosProvider.KEY_GAP23_3] = "$gap23_3"
         m[BubblePosProvider.KEY_ICON_SIZE] = "$iconSize"
         m[BubblePosProvider.KEY_BG_ALPHA] = "$bgAlpha"
+        m[BubblePosProvider.KEY_BG_LIGHT] = if (bgLight) "1" else "0"
+        m[BubblePosProvider.KEY_BG_BORDER] = if (bgBorder) "1" else "0"
         m[BubblePosProvider.KEY_DISMISS_SECS] = "$dismissSecs"
+        m[BubblePosProvider.KEY_SNAPSHOT_MAX_COUNT] = "$snapshotMaxCount"
+        m[BubblePosProvider.KEY_SNAPSHOT_TTL_SECS] = "$snapshotTtlSecs"
+        m[BubblePosProvider.KEY_SNAPSHOT_AUTO_CLEAN] = if (snapshotAutoClean) "1" else "0"
+        m[BubblePosProvider.KEY_SNAPSHOT_AUTO_CLOSE] = if (snapshotAutoClose) "1" else "0"
+        m[BubblePosProvider.KEY_SNAPSHOT_OPEN_SOURCE_CLOSE] = if (snapshotOpenSourceClose) "1" else "0"
+        m[BubblePosProvider.KEY_SNAPSHOT_BG_BLUR] = if (snapshotBgBlur) "1" else "0"
+        m[BubblePosProvider.KEY_SNAPSHOT_CORNER_DP] = "$snapshotCornerDp"
+        m[BubblePosProvider.KEY_SNAPSHOT_DIR] = snapshotDir
         if (!m.containsKey(PlatformRuleStore.KEY_PLATFORM_RULES)) {
             m[PlatformRuleStore.KEY_PLATFORM_RULES] = PlatformRuleStore.toJson(PlatformRuleStore.DEFAULT_RULES)
         }
@@ -762,7 +1164,14 @@ class MainActivity : AppCompatActivity() {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 val a = bgAlpha * 255 / 100
-                setColor(Color.argb(a, 0x3C, 0x3C, 0x3C))
+                val rgb = if (bgLight) 0xFF else 0x3C
+                setColor(Color.argb(a, rgb, rgb, rgb))
+                if (bgBorder) {
+                    setStroke(
+                        dp(1),
+                        if (bgLight) Color.argb(0x66, 0xFF, 0xFF, 0xFF) else Color.BLACK
+                    )
+                }
                 cornerRadius = dp(16).toFloat()
             }
         }
@@ -843,12 +1252,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        stopRepeatMove()
         dismissPreview()
         findViewById<Button>(R.id.btn_show).text = "▶ 显示预览"
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        stopRepeatMove()
         dismissPreview()
         findViewById<Button>(R.id.btn_show).text = "▶ 显示预览"
     }

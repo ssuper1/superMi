@@ -5,6 +5,8 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import de.robv.android.xposed.XposedBridge
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 object BubblePrefs {
 
@@ -14,6 +16,7 @@ object BubblePrefs {
     const val KEY_RULES = "supermi_platform_rules"
     const val KEY_NUM_RULES = "supermi_number_rules"
     const val KEY_DEBUG = "supermi_debug"
+    const val KEY_DEBUG_TOAST = "supermi_debug_toast"
     const val KEY_MAX_LEN = "supermi_max_len"
     const val DEFAULT_TOP_OFFSET = 30
     const val DEFAULT_X_OFFSET = 0
@@ -23,6 +26,11 @@ object BubblePrefs {
     private const val PROVIDER_URI = "content://com.example.supermi.bubblepos"
     private const val METHOD_GET = "get_config"
     private const val CACHE_TTL_MS = 3000L
+
+    /** 供 DebugToast/DebugLogStore 等把 Provider/设置读取挪到后台，避免阻塞 system_server 主线程。 */
+    val executor: ExecutorService = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "supermi-prefs").apply { isDaemon = true }
+    }
 
     @Volatile
     private var cachedConfig: Bundle? = null
@@ -71,8 +79,113 @@ object BubblePrefs {
     const val DEFAULT_ICON_SIZE = 24
     const val ICON_SIZE_MIN = 16
     const val ICON_SIZE_MAX = 48
-    const val DEFAULT_BG_ALPHA = 85
+    const val DEFAULT_BG_ALPHA = 20
+    const val DEFAULT_BG_LIGHT = false
+    const val DEFAULT_BG_BORDER = false
     const val DEFAULT_DISMISS_SECS = 5
+    const val DEFAULT_SNAPSHOT_MAX_COUNT = 1
+    const val DEFAULT_SNAPSHOT_TTL_SECS = 60
+    const val DEFAULT_SNAPSHOT_AUTO_CLEAN = true
+    const val DEFAULT_SNAPSHOT_AUTO_CLOSE = false
+    const val DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE = true
+    const val DEFAULT_SNAPSHOT_CORNER_DP = 12
+    const val DEFAULT_SNAPSHOT_BG_BLUR = true
+    const val DEFAULT_SNAPSHOT_DIR = ""
+    const val SNAPSHOT_CORNER_MIN = 0
+    const val SNAPSHOT_CORNER_MAX = 40
+    const val SNAPSHOT_RECENT_MS = 12L * 60 * 60 * 1000
+
+    fun snapshotMaxCount(ctx: Context?): Int {
+        val resolver = ctx?.contentResolver
+        val v = config(ctx)?.getInt("snapshot_max_count")
+            ?: resolver?.let { Settings.System.getInt(it, "supermi_snapshot_max_count", DEFAULT_SNAPSHOT_MAX_COUNT) }
+            ?: DEFAULT_SNAPSHOT_MAX_COUNT
+        return v.coerceIn(1, 3)
+    }
+
+    fun snapshotTtlMs(ctx: Context?): Long {
+        val resolver = ctx?.contentResolver
+        val v = config(ctx)?.getInt("snapshot_ttl_secs")
+            ?: resolver?.let { Settings.System.getInt(it, "supermi_snapshot_ttl_secs", DEFAULT_SNAPSHOT_TTL_SECS) }
+            ?: DEFAULT_SNAPSHOT_TTL_SECS
+        return v.coerceIn(15, 600) * 1000L
+    }
+
+    fun snapshotAutoClean(ctx: Context?): Boolean {
+        val resolver = ctx?.contentResolver
+        val v = config(ctx)?.getBoolean("snapshot_auto_clean")
+            ?: resolver?.let { Settings.System.getInt(it, "supermi_snapshot_auto_clean", if (DEFAULT_SNAPSHOT_AUTO_CLEAN) 1 else 0) == 1 }
+            ?: DEFAULT_SNAPSHOT_AUTO_CLEAN
+        return v
+    }
+
+    /** true=定时关闭（到 TTL 自动消失），false=一直开启（只能手动关闭）。 */
+    fun snapshotAutoClose(ctx: Context?): Boolean {
+        val resolver = ctx?.contentResolver
+        val v = config(ctx)?.getBoolean("snapshot_auto_close")
+            ?: resolver?.let { Settings.System.getInt(it, "supermi_snapshot_auto_close", if (DEFAULT_SNAPSHOT_AUTO_CLOSE) 1 else 0) == 1 }
+            ?: DEFAULT_SNAPSHOT_AUTO_CLOSE
+        return v
+    }
+
+    /** true=点击来源 App 返回后直接关闭查看框；false=返回后停留在查看框。 */
+    fun snapshotOpenSourceClose(ctx: Context?): Boolean {
+        val resolver = ctx?.contentResolver
+        val v = config(ctx)?.getBoolean("snapshot_open_source_close")
+            ?: resolver?.let {
+                Settings.System.getInt(it, "supermi_snapshot_open_source_close", if (DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE) 1 else 0) == 1
+            }
+            ?: DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE
+        return v
+    }
+
+    /** true=查看框背景用模糊蒙版；false=保持原来的黑底正常背景。 */
+    fun snapshotBgBlur(ctx: Context?): Boolean {
+        val resolver = ctx?.contentResolver
+        val v = config(ctx)?.getBoolean("snapshot_bg_blur")
+            ?: resolver?.let {
+                Settings.System.getInt(it, "supermi_snapshot_bg_blur", if (DEFAULT_SNAPSHOT_BG_BLUR) 1 else 0) == 1
+            }
+            ?: DEFAULT_SNAPSHOT_BG_BLUR
+        return v
+    }
+
+    fun snapshotCornerDp(ctx: Context?): Int {
+        val resolver = ctx?.contentResolver
+        val v = config(ctx)?.getInt("snapshot_corner_dp")
+            ?: resolver?.let { Settings.System.getInt(it, "supermi_snapshot_corner_dp", DEFAULT_SNAPSHOT_CORNER_DP) }
+            ?: DEFAULT_SNAPSHOT_CORNER_DP
+        return v.coerceIn(SNAPSHOT_CORNER_MIN, SNAPSHOT_CORNER_MAX)
+    }
+
+    /** 查看框启动时使用，不经过 3 秒缓存，确保刚调整完就能读到新值。 */
+    fun snapshotCornerDpFresh(ctx: Context?): Int {
+        val b = freshConfig(ctx)
+        if (b != null && b.containsKey("snapshot_corner_dp")) {
+            return b.getInt("snapshot_corner_dp", DEFAULT_SNAPSHOT_CORNER_DP)
+                .coerceIn(SNAPSHOT_CORNER_MIN, SNAPSHOT_CORNER_MAX)
+        }
+        val resolver = ctx?.contentResolver ?: return DEFAULT_SNAPSHOT_CORNER_DP
+        return Settings.System.getInt(resolver, "supermi_snapshot_corner_dp", DEFAULT_SNAPSHOT_CORNER_DP)
+            .coerceIn(SNAPSHOT_CORNER_MIN, SNAPSHOT_CORNER_MAX)
+    }
+
+    /** 系统截屏目录：手动配置优先，未配置时由删除链路自动检测。 */
+    fun snapshotDir(ctx: Context?): String {
+        val resolver = ctx?.contentResolver
+        val v = config(ctx)?.getString("snapshot_dir")
+            ?: resolver?.let { Settings.System.getString(it, "supermi_snapshot_dir") }
+            ?: DEFAULT_SNAPSHOT_DIR
+        return v
+    }
+
+    /** 删除链路使用，不经过 3 秒缓存，避免刚改完目录就读到旧值。 */
+    fun snapshotDirFresh(ctx: Context?): String {
+        val b = freshConfig(ctx)
+        if (b != null && b.containsKey("snapshot_dir")) return b.getString("snapshot_dir").orEmpty()
+        val resolver = ctx?.contentResolver ?: return DEFAULT_SNAPSHOT_DIR
+        return Settings.System.getString(resolver, "supermi_snapshot_dir").orEmpty()
+    }
 
     fun dismissSecs(ctx: Context?): Int {
         val v = config(ctx)?.getInt("dismiss_secs") ?: Settings.System.getInt(
@@ -98,6 +211,22 @@ object BubblePrefs {
             "supermi_bg_alpha", DEFAULT_BG_ALPHA
         )
         return v.coerceIn(0, 100)
+    }
+
+    fun bgLight(ctx: Context?): Boolean {
+        val resolver = ctx?.contentResolver
+        val v = config(ctx)?.getBoolean("bg_light")
+            ?: resolver?.let { Settings.System.getInt(it, "supermi_bg_light", if (DEFAULT_BG_LIGHT) 1 else 0) == 1 }
+            ?: DEFAULT_BG_LIGHT
+        return v
+    }
+
+    fun bgBorder(ctx: Context?): Boolean {
+        val resolver = ctx?.contentResolver
+        val v = config(ctx)?.getBoolean("bg_border")
+            ?: resolver?.let { Settings.System.getInt(it, "supermi_bg_border", if (DEFAULT_BG_BORDER) 1 else 0) == 1 }
+            ?: DEFAULT_BG_BORDER
+        return v
     }
 
     fun maxLen(ctx: Context?): Int {
@@ -126,8 +255,35 @@ object BubblePrefs {
         return Settings.System.getInt(resolver, KEY_DEBUG, 0) == 1
     }
 
+    fun debugToastEnabled(ctx: Context?): Boolean {
+        // 不经过 3 秒缓存，切换后立即生效（缓存里可能是旧值）
+        val b = freshConfig(ctx)
+        if (b != null && b.containsKey("debug_toast")) return b.getBoolean("debug_toast", true)
+        val resolver = ctx?.contentResolver ?: return true
+        return Settings.System.getInt(resolver, KEY_DEBUG_TOAST, 1) == 1
+    }
+
+    /** 强制在后台刷新一次缓存；主线程调用时不会做跨进程读取。 */
+    fun refreshInBackground(ctx: Context?) {
+        executor.execute { debugEnabled(ctx) }
+    }
+
     private fun splitApps(value: String?): List<String> =
         value?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+
+    private fun freshConfig(ctx: Context?): Bundle? {
+        val resolver = ctx?.contentResolver ?: return null
+        var token = 0L
+        try {
+            token = android.os.Binder.clearCallingIdentity()
+            return resolver.call(Uri.parse(PROVIDER_URI), METHOD_GET, null, null)
+        } catch (t: Throwable) {
+            XposedBridge.log("SuperMi: fresh config query failed: $t")
+        } finally {
+            android.os.Binder.restoreCallingIdentity(token)
+        }
+        return null
+    }
 
     private fun config(ctx: Context?): Bundle? {
         val resolver = ctx?.contentResolver ?: return null
@@ -169,12 +325,16 @@ object BubblePrefs {
             b.getString(PlatformRuleStore.KEY_PLATFORM_RULES) ?: "",
             b.getString(NumberRuleStore.KEY_NUMBER_RULES) ?: "",
             b.getBoolean("debug").toString(),
+            b.getBoolean("debug_toast", true).toString(),
             b.getInt("max_len", DEFAULT_MAX_LEN).toString(),
             b.getInt("gap12_2", 6).toString(),
             b.getInt("gap12_3", 6).toString(),
             b.getInt("gap23_3", 6).toString(),
             b.getInt("bg_alpha", DEFAULT_BG_ALPHA).toString(),
+            b.getBoolean("bg_light", DEFAULT_BG_LIGHT).toString(),
+            b.getBoolean("bg_border", DEFAULT_BG_BORDER).toString(),
             b.getInt("dismiss_secs", DEFAULT_DISMISS_SECS).toString()
+            ,b.getInt("snapshot_max_count", DEFAULT_SNAPSHOT_MAX_COUNT).toString(), b.getInt("snapshot_ttl_secs", DEFAULT_SNAPSHOT_TTL_SECS).toString(), b.getBoolean("snapshot_auto_clean", DEFAULT_SNAPSHOT_AUTO_CLEAN).toString(), b.getBoolean("snapshot_auto_close", DEFAULT_SNAPSHOT_AUTO_CLOSE).toString(), b.getBoolean("snapshot_open_source_close", DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE).toString(), b.getBoolean("snapshot_bg_blur", DEFAULT_SNAPSHOT_BG_BLUR).toString(), b.getInt("snapshot_corner_dp", DEFAULT_SNAPSHOT_CORNER_DP).toString(), b.getString("snapshot_dir") ?: ""
         ).joinToString("\u0000")
 
     private fun persistSettings(ctx: Context, b: Bundle) {
@@ -193,12 +353,23 @@ object BubblePrefs {
             Settings.System.putInt(cr, "supermi_num_default_max", b.getInt("num_default_max", DEFAULT_LEN_MAX))
             Settings.System.putInt(cr, "supermi_icon_size", b.getInt("icon_size", DEFAULT_ICON_SIZE))
             Settings.System.putInt(cr, "supermi_bg_alpha", b.getInt("bg_alpha", DEFAULT_BG_ALPHA))
+            Settings.System.putInt(cr, "supermi_bg_light", if (b.getBoolean("bg_light", DEFAULT_BG_LIGHT)) 1 else 0)
+            Settings.System.putInt(cr, "supermi_bg_border", if (b.getBoolean("bg_border", DEFAULT_BG_BORDER)) 1 else 0)
             Settings.System.putInt(cr, "supermi_dismiss_secs", b.getInt("dismiss_secs", DEFAULT_DISMISS_SECS))
             Settings.System.putInt(cr, KEY_MAX_LEN, b.getInt("max_len", DEFAULT_MAX_LEN))
             Settings.System.putInt(cr, "supermi_gap12_2", b.getInt("gap12_2", 6))
             Settings.System.putInt(cr, "supermi_gap12_3", b.getInt("gap12_3", 6))
             Settings.System.putInt(cr, "supermi_gap23_3", b.getInt("gap23_3", 6))
             Settings.System.putInt(cr, KEY_DEBUG, if (b.getBoolean("debug")) 1 else 0)
+            Settings.System.putInt(cr, KEY_DEBUG_TOAST, if (b.getBoolean("debug_toast", true)) 1 else 0)
+            Settings.System.putInt(cr, "supermi_snapshot_max_count", b.getInt("snapshot_max_count", DEFAULT_SNAPSHOT_MAX_COUNT))
+            Settings.System.putInt(cr, "supermi_snapshot_ttl_secs", b.getInt("snapshot_ttl_secs", DEFAULT_SNAPSHOT_TTL_SECS))
+            Settings.System.putInt(cr, "supermi_snapshot_auto_clean", if (b.getBoolean("snapshot_auto_clean", DEFAULT_SNAPSHOT_AUTO_CLEAN)) 1 else 0)
+            Settings.System.putInt(cr, "supermi_snapshot_auto_close", if (b.getBoolean("snapshot_auto_close", DEFAULT_SNAPSHOT_AUTO_CLOSE)) 1 else 0)
+            Settings.System.putInt(cr, "supermi_snapshot_open_source_close", if (b.getBoolean("snapshot_open_source_close", DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE)) 1 else 0)
+            Settings.System.putInt(cr, "supermi_snapshot_bg_blur", if (b.getBoolean("snapshot_bg_blur", DEFAULT_SNAPSHOT_BG_BLUR)) 1 else 0)
+            Settings.System.putInt(cr, "supermi_snapshot_corner_dp", b.getInt("snapshot_corner_dp", DEFAULT_SNAPSHOT_CORNER_DP))
+            Settings.System.putString(cr, "supermi_snapshot_dir", b.getString("snapshot_dir"))
         } catch (_: Throwable) {
         }
     }
@@ -219,12 +390,23 @@ object BubblePrefs {
             putInt("num_default_max", Settings.System.getInt(cr, "supermi_num_default_max", DEFAULT_LEN_MAX))
             putInt("icon_size", Settings.System.getInt(cr, "supermi_icon_size", DEFAULT_ICON_SIZE))
             putInt("bg_alpha", Settings.System.getInt(cr, "supermi_bg_alpha", DEFAULT_BG_ALPHA))
+            putBoolean("bg_light", Settings.System.getInt(cr, "supermi_bg_light", if (DEFAULT_BG_LIGHT) 1 else 0) == 1)
+            putBoolean("bg_border", Settings.System.getInt(cr, "supermi_bg_border", if (DEFAULT_BG_BORDER) 1 else 0) == 1)
             putInt("dismiss_secs", Settings.System.getInt(cr, "supermi_dismiss_secs", DEFAULT_DISMISS_SECS))
             putInt("max_len", Settings.System.getInt(cr, KEY_MAX_LEN, DEFAULT_MAX_LEN))
             putInt("gap12_2", Settings.System.getInt(cr, "supermi_gap12_2", Settings.System.getInt(cr, "supermi_gap12", 6)))
             putInt("gap12_3", Settings.System.getInt(cr, "supermi_gap12_3", Settings.System.getInt(cr, "supermi_gap12", 6)))
             putInt("gap23_3", Settings.System.getInt(cr, "supermi_gap23_3", Settings.System.getInt(cr, "supermi_gap23", 6)))
             putBoolean("debug", Settings.System.getInt(cr, KEY_DEBUG, 0) == 1)
+            putBoolean("debug_toast", Settings.System.getInt(cr, KEY_DEBUG_TOAST, 1) == 1)
+            putInt("snapshot_max_count", Settings.System.getInt(cr, "supermi_snapshot_max_count", DEFAULT_SNAPSHOT_MAX_COUNT))
+            putInt("snapshot_ttl_secs", Settings.System.getInt(cr, "supermi_snapshot_ttl_secs", DEFAULT_SNAPSHOT_TTL_SECS))
+            putBoolean("snapshot_auto_clean", Settings.System.getInt(cr, "supermi_snapshot_auto_clean", 1) == 1)
+            putBoolean("snapshot_auto_close", Settings.System.getInt(cr, "supermi_snapshot_auto_close", if (DEFAULT_SNAPSHOT_AUTO_CLOSE) 1 else 0) == 1)
+            putBoolean("snapshot_open_source_close", Settings.System.getInt(cr, "supermi_snapshot_open_source_close", if (DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE) 1 else 0) == 1)
+            putBoolean("snapshot_bg_blur", Settings.System.getInt(cr, "supermi_snapshot_bg_blur", if (DEFAULT_SNAPSHOT_BG_BLUR) 1 else 0) == 1)
+            putInt("snapshot_corner_dp", Settings.System.getInt(cr, "supermi_snapshot_corner_dp", DEFAULT_SNAPSHOT_CORNER_DP))
+            putString("snapshot_dir", Settings.System.getString(cr, "supermi_snapshot_dir"))
         }
     } catch (_: Throwable) {
         null

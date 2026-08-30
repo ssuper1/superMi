@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <permission android:name="com.example.supermi.permission.SHOW_SNAPSHOT" android:protectionLevel="signature" />
+    <uses-permission android:name="com.example.supermi.permission.SHOW_SNAPSHOT" />
+
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
@@ -77,6 +80,36 @@
         <activity
             android:name=".NumberRulesActivity"
             android:exported="false" />
+        <activity
+            android:name=".SnapshotCornerActivity"
+            android:exported="false" />
+        <activity
+            android:name=".DebugDetailsActivity"
+            android:exported="false" />
+        <activity android:name=".ShareReceiverActivity" android:exported="true" android:theme="@style/Theme.SuperMi.Transparent">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".SnapshotViewerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.SuperMi.Viewer"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+        <receiver
+            android:name=".SnapshotCleanReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.supermi.CLEAR_SNAPSHOTS" />
+            </intent-filter>
+        </receiver>
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>
