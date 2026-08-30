@@ -24,8 +24,10 @@ class HookEntry : IXposedHookLoadPackage {
         SystemContextHolder.init(lpparam.classLoader)
         registerSnapshotReceiver()
         registerSnapshotDeleteReceiver()
+        registerSnapshotRestoreReceiver()
         Handler(Looper.getMainLooper()).postDelayed({ registerSnapshotReceiver() }, 3000L)
         Handler(Looper.getMainLooper()).postDelayed({ registerSnapshotDeleteReceiver() }, 3000L)
+        Handler(Looper.getMainLooper()).postDelayed({ registerSnapshotRestoreReceiver() }, 3000L)
         try {
             val clazz = XposedHelpers.findClass(
                 "com.android.server.clipboard.ClipboardService",
@@ -123,5 +125,23 @@ class HookEntry : IXposedHookLoadPackage {
         }
     }
 
+    private fun registerSnapshotRestoreReceiver() {
+        if (snapshotRestoreReceiverRegistered) return
+        val ctx = SystemContextHolder.context() ?: return
+        try {
+            val filter = IntentFilter("com.example.supermi.RESTORE_SNAPSHOT")
+            ctx.registerReceiver(object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    OverlayBubble.restoreSnapshotBubble()
+                }
+            }, filter, "com.example.supermi.permission.SHOW_SNAPSHOT", null, Context.RECEIVER_EXPORTED)
+            snapshotRestoreReceiverRegistered = true
+            XposedBridge.log("SuperMi: snapshot restore receiver registered")
+        } catch (t: Throwable) {
+            XposedBridge.log("SuperMi: snapshot restore receiver setup failed: $t")
+        }
+    }
+
     @Volatile private var snapshotDeleteReceiverRegistered = false
+    @Volatile private var snapshotRestoreReceiverRegistered = false
 }

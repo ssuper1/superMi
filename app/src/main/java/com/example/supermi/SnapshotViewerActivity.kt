@@ -2,6 +2,7 @@ package com.example.supermi
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
+import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.Intent
@@ -12,10 +13,13 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Outline
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.RadialGradient
+import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
@@ -68,6 +72,7 @@ class SnapshotViewerActivity : Activity() {
     private var barVisible = true
     private var blurBackground = false
     private var blurRadiusPx = 0
+    private var restoreBubbleSent = false
     private lateinit var ambientBackground: AmbientBackgroundDrawable
 
     private lateinit var root: LinearLayout
@@ -128,6 +133,7 @@ class SnapshotViewerActivity : Activity() {
             ambientBackground = AmbientBackgroundDrawable()
             ambientBackground.dynamic = !blurBackground
             ambientBackground.blurGlass = blurBackground
+            ambientBackground.cornerRadiusPx = if (blurBackground) dp(20).toFloat() else 0f
             background = ambientBackground
         }
 
@@ -156,6 +162,8 @@ class SnapshotViewerActivity : Activity() {
                 setCornerRadius(dp(cornerDp).toFloat())
                 // 图片更贴近底部按钮行
                 setBaseInset(dp(4).toFloat())
+                // 仅模糊模式增加轻微悬浮层次，普通模式保持原样。
+                if (blurBackground) elevation = dp(6).toFloat()
                 clipToOutline = true
                 outlineProvider = object : ViewOutlineProvider() {
                     override fun getOutline(view: View, outline: Outline) {
@@ -338,6 +346,12 @@ class SnapshotViewerActivity : Activity() {
             )
         )
         setContentView(root)
+        // 模糊模式背景提升到 Decor 层，确保从状态栏上沿连续覆盖到屏幕底部，
+        // 不受查看区图片留白和内容 inset 影响；普通模式保持原有 root 层级。
+        if (blurBackground) {
+            root.background = ColorDrawable(Color.TRANSPARENT)
+            window.decorView.background = ambientBackground
+        }
         overridePendingTransition(0, 0)
 
         applySystemBarInsets()
@@ -345,6 +359,16 @@ class SnapshotViewerActivity : Activity() {
         // 布局完成后按「取消展示」按钮实际高度校准一次图标尺寸
         root.post {
             if (closeBtn.height > 0) updatePageIndicator()
+            if (blurBackground) {
+                val decorLoc = IntArray(2)
+                val areaLoc = IntArray(2)
+                window.decorView.getLocationOnScreen(decorLoc)
+                area.getLocationOnScreen(areaLoc)
+                ambientBackground.panelBottomPx =
+                    (areaLoc[1] + area.height - decorLoc[1])
+                        .coerceIn(1, root.height).toFloat()
+                ambientBackground.invalidateSelf()
+            }
         }
     }
 
@@ -499,9 +523,28 @@ class SnapshotViewerActivity : Activity() {
             sourceOpenStopped = false
             sourceOpenPendingClose = false
             if (!isFinishing && !exiting) {
+                restoreBubbleAfterClose()
                 finish()
                 overridePendingTransition(0, 0)
             }
+        }
+    }
+
+    override fun onDestroy() {
+        // 处理系统返回、来源 App 返回等非 finishWithExit 路径。
+        restoreBubbleAfterClose()
+        super.onDestroy()
+    }
+
+    private fun restoreBubbleAfterClose() {
+        if (restoreBubbleSent || uris.isEmpty()) return
+        restoreBubbleSent = true
+        try {
+            sendBroadcast(
+                Intent("com.example.supermi.RESTORE_SNAPSHOT")
+                    .setPackage("android")
+            )
+        } catch (_: Throwable) {
         }
     }
 
@@ -632,6 +675,7 @@ class SnapshotViewerActivity : Activity() {
         }
         anim.addListener(object : AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: Animator) {
+                restoreBubbleAfterClose()
                 finish()
                 overridePendingTransition(0, 0)
             }
@@ -666,7 +710,7 @@ class SnapshotViewerActivity : Activity() {
      * 两张图全程不透明，动画结束才清空旧图，避免切换时闪黑。
      */
     private fun showBitmap(bitmap: Bitmap, fromX: Float?) {
-        ambientBackground.setAccentColor(sampleAmbientColor(bitmap))
+        ambientBackground.animateAccentColor(sampleAmbientColor(bitmap))
         val incoming = if (front === viewA) viewB else viewA
         val outgoing = front
         // 可能打断上一次滑动：先把两边动画停掉、归位，避免残留位移叠到新动画上
@@ -761,13 +805,34 @@ class SnapshotViewerActivity : Activity() {
     private class AmbientBackgroundDrawable : Drawable() {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         private var accent = Color.rgb(40, 42, 48)
+        private var accentAnimator: ValueAnimator? = null
         var dynamic = false
         var blurGlass = false
+        var cornerRadiusPx = 0f
+        var panelBottomPx = 0f
         var progress = 0f
 
         fun setAccentColor(color: Int) {
+            accentAnimator?.cancel()
             accent = color
             invalidateSelf()
+        }
+
+        fun animateAccentColor(color: Int) {
+            accentAnimator?.cancel()
+            if (!blurGlass) {
+                setAccentColor(color)
+                return
+            }
+            val start = accent
+            accentAnimator = ValueAnimator.ofObject(ArgbEvaluator(), start, color).apply {
+                duration = 220L
+                addUpdateListener {
+                    accent = it.animatedValue as Int
+                    invalidateSelf()
+                }
+                start()
+            }
         }
 
         override fun draw(canvas: Canvas) {
@@ -775,6 +840,18 @@ class SnapshotViewerActivity : Activity() {
             val h = bounds.height().toFloat()
             if (w <= 0f || h <= 0f) return
             val alpha = (progress.coerceIn(0f, 1f) * 255f).toInt()
+            if (blurGlass && cornerRadiusPx > 0f) {
+                canvas.save()
+                val clip = Path().apply {
+                    addRoundRect(
+                        RectF(0f, 0f, w, h),
+                        cornerRadiusPx,
+                        cornerRadiusPx,
+                        Path.Direction.CW
+                    )
+                }
+                canvas.clipPath(clip)
+            }
             if (!dynamic && !blurGlass) {
                 paint.shader = null
                 paint.color = Color.argb(alpha, 17, 17, 17)
@@ -782,17 +859,37 @@ class SnapshotViewerActivity : Activity() {
                 return
             }
             if (!dynamic) {
-                // 毛玻璃模式：系统模糊负责景深，这层负责色调和上下层次。
-                val top = Color.argb((alpha * 0.18f).toInt(), Color.red(accent), Color.green(accent), Color.blue(accent))
-                val bottom = Color.argb((alpha * 0.68f).toInt(), 8, 9, 12)
-                paint.shader = LinearGradient(0f, 0f, 0f, h, top, bottom, Shader.TileMode.CLAMP)
-                canvas.drawRect(0f, 0f, w, h, paint)
-                val glow = Color.argb((alpha * 0.12f).toInt(), Color.red(accent), Color.green(accent), Color.blue(accent))
-                paint.shader = RadialGradient(w * 0.5f, h * 0.34f, w * 0.7f, glow, Color.TRANSPARENT, Shader.TileMode.CLAMP)
-                canvas.drawRect(0f, 0f, w, h, paint)
-                paint.shader = RadialGradient(w * 0.5f, h * 0.42f, w * 0.84f, Color.TRANSPARENT, Color.argb((alpha * 0.24f).toInt(), 0, 0, 0), Shader.TileMode.CLAMP)
-                canvas.drawRect(0f, 0f, w, h, paint)
+                // 毛玻璃模式：外圈保持暗黑，内层是从状态栏上沿开始的圆角亮面。
                 paint.shader = null
+                paint.color = Color.argb((alpha * 0.44f).toInt(), 7, 8, 11)
+                canvas.drawRect(0f, 0f, w, h, paint)
+                val inset = (cornerRadiusPx * 0.6f).coerceAtLeast(8f)
+                // 底边与实际图片区域(area)对齐，不再用固定 h-inset 导致内层偏矮。
+                val panelBottom = if (panelBottomPx > 0f) panelBottomPx else h
+                val panel = RectF(inset, 0f, w - inset, panelBottom)
+                paint.shader = LinearGradient(
+                    0f, 0f, 0f, panel.bottom,
+                    Color.argb((alpha * 0.20f).toInt(), Color.red(accent), Color.green(accent), Color.blue(accent)),
+                    Color.argb((alpha * 0.14f).toInt(), 24, 25, 30),
+                    Shader.TileMode.CLAMP
+                )
+                canvas.drawRoundRect(panel, cornerRadiusPx, cornerRadiusPx, paint)
+                // 内层仅保留很轻的中心提亮，避免再次形成明显横向分层。
+                val glow = Color.argb((alpha * 0.06f).toInt(), Color.red(accent), Color.green(accent), Color.blue(accent))
+                paint.shader = RadialGradient(w * 0.5f, h * 0.34f, w * 0.72f, glow, Color.TRANSPARENT, Shader.TileMode.CLAMP)
+                canvas.drawRoundRect(panel, cornerRadiusPx, cornerRadiusPx, paint)
+                paint.shader = null
+                if (blurGlass && cornerRadiusPx > 0f) {
+                    canvas.restore()
+                    paint.style = Paint.Style.STROKE
+                    paint.strokeWidth = 1.5f
+                    paint.color = Color.argb((alpha * 0.16f).toInt(), 255, 255, 255)
+                    canvas.drawRoundRect(
+                        0.75f, 0.75f, w - 0.75f, h - 0.75f,
+                        cornerRadiusPx, cornerRadiusPx, paint
+                    )
+                    paint.style = Paint.Style.FILL
+                }
                 return
             }
             val top = Color.argb(alpha, Color.red(accent), Color.green(accent), Color.blue(accent))
@@ -815,6 +912,7 @@ class SnapshotViewerActivity : Activity() {
             paint.shader = RadialGradient(w * 0.5f, h * 0.42f, w * 0.82f, Color.TRANSPARENT, Color.argb((alpha * 0.72f).toInt(), 0, 0, 0), Shader.TileMode.CLAMP)
             canvas.drawRect(0f, 0f, w, h, paint)
             paint.shader = null
+            if (blurGlass && cornerRadiusPx > 0f) canvas.restore()
         }
 
         override fun setAlpha(alpha: Int) = Unit

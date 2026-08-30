@@ -59,6 +59,7 @@ object OverlayBubble {
     private var snapshotDismiss: Runnable? = null
     private var snapshotParams: WindowManager.LayoutParams? = null
     private var snapshotStyle: BubbleValues? = null
+    private var snapshotViewerOpen = false
 
     private data class ResolveCacheKey(
         val type: ContentClassifier.ContentType,
@@ -214,7 +215,7 @@ object OverlayBubble {
                 mainHandler.post {
                     try {
                         // 无可见气泡、无待触发定时 → 视为新会话，丢弃历史残留 URI
-                        if (snapshotView == null && snapshotDismiss == null && snapshotUris.isNotEmpty()) {
+                        if (!snapshotViewerOpen && snapshotView == null && snapshotDismiss == null && snapshotUris.isNotEmpty()) {
                             XposedBridge.log("$TAG snapshot 新会话: 清空残留 ${snapshotUris.size} 个旧条目")
                             snapshotUris.clear()
                             snapshotSources.clear()
@@ -236,7 +237,7 @@ object OverlayBubble {
                             snapshotSources.remove(old)
                             snapshotBitmaps.remove(old)
                         }
-                        showSnapshotBubble(ctx, values)
+                        if (!snapshotViewerOpen) showSnapshotBubble(ctx, values)
                     } catch (t: Throwable) {
                         XposedBridge.log("$TAG snapshot main failed: $t")
                     }
@@ -293,7 +294,7 @@ object OverlayBubble {
                     snapshotSources.remove(uri)
                     snapshotBitmaps.remove(uri)
                     dismissSnapshot()
-                    if (snapshotUris.isNotEmpty()) {
+                    if (snapshotUris.isNotEmpty() && !snapshotViewerOpen) {
                         rebuildSnapshotBubble(ctx)
                     }
                 }
@@ -496,6 +497,17 @@ object OverlayBubble {
         showSnapshotBubble(ctx, values)
     }
 
+    /** 查看框退出后，按仍然存在的截图队列恢复气泡。 */
+    fun restoreSnapshotBubble() {
+        val ctx = systemContext() ?: return
+        mainHandler.post {
+            snapshotViewerOpen = false
+            if (snapshotView == null && snapshotUris.isNotEmpty()) {
+                rebuildSnapshotBubble(ctx)
+            }
+        }
+    }
+
     private fun showSnapshotBubble(ctx: Context, values: BubbleValues) {
         dismissSnapshot()
         if (snapshotUris.isEmpty()) return
@@ -630,7 +642,10 @@ object OverlayBubble {
             ctx.startActivity(intent)
             // 查看器已拿到气泡原点坐标；启动成功后移除气泡，避免遮挡查看内容。
             // 用 post 避免在当前 ImageView 点击分发过程中直接移除父窗口。
-            mainHandler.post { dismissSnapshot() }
+            mainHandler.post {
+                snapshotViewerOpen = true
+                dismissSnapshot()
+            }
         } catch (t: Throwable) {
             XposedBridge.log("$TAG openSnapshotViewer failed: $t")
         }
