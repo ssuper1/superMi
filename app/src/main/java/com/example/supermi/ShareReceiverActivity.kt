@@ -1,6 +1,7 @@
 package com.example.supermi
 
 import android.app.Activity
+import android.content.ClipData
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
@@ -34,14 +35,26 @@ class ShareReceiverActivity : Activity() {
                 )
                 if (saved != null) {
                     val grant = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    try { grantUriPermission("android", androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", saved.file), grant) } catch (_: Throwable) {}
+                    val cacheUri = androidx.core.content.FileProvider.getUriForFile(
+                        this, "$packageName.fileprovider", saved.file
+                    )
+                    try {
+                        grantUriPermission("android", cacheUri, grant)
+                        diag("已授予 system_server 读取缓存 URI: $cacheUri")
+                    } catch (t: Throwable) {
+                        // Android 16/部分 ROM 可能拒绝按 package 授权；事件中同时带路径兜底。
+                        diag("授予 system_server 缓存 URI 失败: $t uri=$cacheUri")
+                    }
                     val event = Intent(ACTION_SHOW_SNAPSHOT).apply {
                         setPackage("android")
                         putExtra(EXTRA_ID, saved.id)
-                        putExtra(EXTRA_URI, androidx.core.content.FileProvider.getUriForFile(this@ShareReceiverActivity, "$packageName.fileprovider", saved.file).toString())
+                        putExtra(EXTRA_URI, cacheUri.toString())
                         putExtra(EXTRA_MIME, saved.mime)
+                        putExtra(SnapshotStore.EXTRA_CACHE_PATH, saved.file.absolutePath)
                         putExtra(SnapshotStore.EXTRA_ORIG_PATH, saved.origPath.orEmpty())
                         putExtra(SnapshotStore.EXTRA_TAKEN_MS, saved.takenMs ?: 0L)
+                        // 同时把 URI 放入 ClipData，确保 Android 16 将 grant 传递给动态 receiver。
+                        clipData = ClipData.newRawUri("snapshot", cacheUri)
                         addFlags(grant)
                     }
                     try {

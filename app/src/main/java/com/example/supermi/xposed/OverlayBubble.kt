@@ -20,6 +20,7 @@ import android.os.Environment
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.view.Gravity
 import android.view.View
@@ -40,6 +41,7 @@ object OverlayBubble {
     private const val MAX_TARGETS = 3
     private const val RESOLVE_CACHE_SIZE = 16
     private const val RESOLVE_CACHE_TTL_MS = 30_000L
+    private const val VIEWER_STALE_MS = 2_000L
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val bgHandler: Handler by lazy {
@@ -60,6 +62,8 @@ object OverlayBubble {
     private var snapshotParams: WindowManager.LayoutParams? = null
     private var snapshotStyle: BubbleValues? = null
     private var snapshotViewerOpen = false
+    /** 防止查看器异常退出/广播丢失后永久阻塞后续截图气泡。 */
+    private var snapshotViewerOpenedAt = 0L
 
     private data class ResolveCacheKey(
         val type: ContentClassifier.ContentType,
@@ -185,17 +189,43 @@ object OverlayBubble {
         }
     }
 
-    fun showSnapshot(uri: Uri, origPath: String? = null, takenMs: Long? = null) {
-        val ctx = systemContext() ?: return
+    fun showSnapshot(
+        uri: Uri,
+        origPath: String? = null,
+        takenMs: Long? = null,
+        cachePath: String? = null,
+        onFinished: (() -> Unit)? = null
+    ) {
+        val ctx = systemContext() ?: run {
+            onFinished?.invoke()
+            return
+        }
         bgHandler.post {
             try {
                 DebugToast.refreshDebug()
                 DebugToast.show(ctx, "收到截图事件: ${uri.toString().takeLast(80)}")
-                val bitmap = ctx.contentResolver.openInputStream(uri)?.use {
-                    BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = 2 })
+                val decodeOptions = BitmapFactory.Options().apply { inSampleSize = 2 }
+                val bitmapFromUri = runCatching {
+                    ctx.contentResolver.openInputStream(uri)?.use {
+                        BitmapFactory.decodeStream(it, null, decodeOptions)
+                    }
+                }.onFailure {
+                    XposedBridge.log("$TAG snapshot URI read failed: $uri: $it")
+                }.getOrNull()
+                // Android 16/部分 MIUI 可能不接受 app -> system_server 的 FileProvider grant；
+                // system_server 对应用私有 no_backup 文件本身有读权限，使用路径兜底。
+                val bitmap = bitmapFromUri ?: cachePath?.let { path ->
+                    runCatching {
+                        File(path).inputStream().use {
+                            BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = 2 })
+                        }
+                    }.onFailure {
+                        XposedBridge.log("$TAG snapshot cache path read failed: $path: $it")
+                    }.getOrNull()
                 }
                 if (bitmap == null) {
                     DebugToast.show(ctx, "截图 URI 无法读取")
+                    XposedBridge.log("$TAG snapshot decode failed uri=$uri cachePath=$cachePath")
                     return@post
                 }
                 DebugToast.show(ctx, "截图读取成功: ${bitmap.width}x${bitmap.height}")
@@ -237,13 +267,36 @@ object OverlayBubble {
                             snapshotSources.remove(old)
                             snapshotBitmaps.remove(old)
                         }
-                        if (!snapshotViewerOpen) showSnapshotBubble(ctx, values)
+                        // Android/MIUI 在查看器进程被系统回收时可能丢失 RESTORE_SNAPSHOT。
+                        // 若状态已持续一段时间且没有对应气泡窗口，自动解除陈旧门控，
+                        // 否则后续分享即使成功保存也会一直被判定为“查看器打开”。
+                        if (snapshotViewerOpen && snapshotView == null &&
+                            snapshotViewerOpenedAt > 0L &&
+                            SystemClock.uptimeMillis() - snapshotViewerOpenedAt > VIEWER_STALE_MS
+                        ) {
+                            XposedBridge.log("$TAG clearing stale viewer state before showing new snapshot")
+                            snapshotViewerOpen = false
+                            snapshotViewerOpenedAt = 0L
+                        }
+                        XposedBridge.log(
+                            "$TAG snapshot main state viewer=$snapshotViewerOpen " +
+                                "view=${snapshotView != null} dismiss=${snapshotDismiss != null} " +
+                                "uris=${snapshotUris.size}"
+                        )
+                        if (!snapshotViewerOpen) {
+                            showSnapshotBubble(ctx, values)
+                        } else {
+                            XposedBridge.log("$TAG snapshot bubble deferred while viewer is open")
+                        }
                     } catch (t: Throwable) {
                         XposedBridge.log("$TAG snapshot main failed: $t")
                     }
                 }
             } catch (t: Throwable) {
                 XposedBridge.log("$TAG snapshot load failed: $t")
+            } finally {
+                // URI grant由广播生命周期持有；完成解码/入队后再释放 PendingResult。
+                onFinished?.invoke()
             }
         }
     }
@@ -502,6 +555,7 @@ object OverlayBubble {
         val ctx = systemContext() ?: return
         mainHandler.post {
             snapshotViewerOpen = false
+            snapshotViewerOpenedAt = 0L
             if (snapshotView == null && snapshotUris.isNotEmpty()) {
                 rebuildSnapshotBubble(ctx)
             }
@@ -568,6 +622,7 @@ object OverlayBubble {
             snapshotParams = params
             snapshotView = row
             snapshotStyle = values
+            XposedBridge.log("$TAG snapshot bubble added x=${params.x} y=${params.y} count=$n")
             scheduleSnapshotAutoClose(ctx, values)
         } catch (t: Throwable) {
             XposedBridge.log("$TAG snapshot bubble add failed: $t")
@@ -641,6 +696,7 @@ object OverlayBubble {
             }
             // 先同步标记查看器状态，再启动 Activity，避免不同设备上恢复/隐藏任务乱序。
             snapshotViewerOpen = true
+            snapshotViewerOpenedAt = SystemClock.uptimeMillis()
             ctx.startActivity(intent)
             // 查看器已拿到气泡原点坐标；启动成功后移除气泡，避免遮挡查看内容。
             // 用 post 避免在当前 ImageView 点击分发过程中直接移除父窗口。
@@ -650,6 +706,7 @@ object OverlayBubble {
             }
         } catch (t: Throwable) {
             snapshotViewerOpen = false
+            snapshotViewerOpenedAt = 0L
             XposedBridge.log("$TAG openSnapshotViewer failed: $t")
         }
     }

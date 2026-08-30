@@ -25,6 +25,8 @@ object SnapshotStore {
     const val EXTRA_TAKEN_MS = "snapshot_taken_ms"
     const val EXTRA_ORIG_TAKEN_MS = "snapshot_orig_taken_ms"
     const val EXTRA_ORIG_NAME = "snapshot_orig_name"
+    /** Android 16 某些 ROM 上 system_server 读取 FileProvider URI 的 grant 不稳定，作为受保护的本地路径兜底。 */
+    const val EXTRA_CACHE_PATH = "snapshot_cache_path"
 
     data class Saved(
         val id: String,

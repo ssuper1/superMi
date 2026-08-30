@@ -574,7 +574,8 @@ class SnapshotViewerActivity : ComponentActivity() {
         try {
             sendBroadcast(
                 Intent("com.example.supermi.RESTORE_SNAPSHOT")
-                    .setPackage("android")
+                    .setPackage("android"),
+                "com.example.supermi.permission.SHOW_SNAPSHOT"
             )
         } catch (_: Throwable) {
         }
