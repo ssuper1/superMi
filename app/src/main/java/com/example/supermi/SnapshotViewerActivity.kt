@@ -4,7 +4,6 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
-import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -35,8 +34,12 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.example.supermi.xposed.BubblePrefs
 import java.util.LinkedHashMap
 import java.util.Random
@@ -45,7 +48,7 @@ import java.util.Random
  * 截图多图查看框：从气泡位置放大入场/收回气泡退场，
  * 底部操作栏可点图隐藏，上滑返回，左右滑动切换（不循环）。
  */
-class SnapshotViewerActivity : Activity() {
+class SnapshotViewerActivity : ComponentActivity() {
 
     private val uris = mutableListOf<Uri>()
     private val sources = mutableListOf<String>()
@@ -73,6 +76,10 @@ class SnapshotViewerActivity : Activity() {
     private var blurBackground = false
     private var blurRadiusPx = 0
     private var restoreBubbleSent = false
+    private var blurBackgroundAttached = false
+    private var backPressedCallback: OnBackPressedCallback? = null
+    /** 当前入场/退场过渡；返回时必须取消入场动画，避免两个动画同时改写同一组属性。 */
+    private var transitionAnimator: ValueAnimator? = null
     private lateinit var ambientBackground: AmbientBackgroundDrawable
 
     private lateinit var root: LinearLayout
@@ -117,16 +124,21 @@ class SnapshotViewerActivity : Activity() {
         val window = window
         // 查看框只绘制在系统栏下方，顶部状态栏保持透明露出底层界面
         // 关闭窗口自带的系统栏避让，统一由下面 inset 监听应用一份边距，避免普通机型出现双重空白
-        window.setDecorFitsSystemWindows(false)
+        // Android 15/16 对 target 35+ 强制 edge-to-edge。通过 AndroidX 统一设置，
+        // 避免直接改 decorView/systemUiVisibility 在不同版本上互相覆盖。
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
+        window.isStatusBarContrastEnforced = false
+        window.isNavigationBarContrastEnforced = false
         if (blurBackground) {
             window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
         }
         // 黑底/半透明蒙版都应配浅色状态栏/导航栏图标，去掉主题里的深色图标标志
-        window.decorView.systemUiVisibility = window.decorView.systemUiVisibility and
-            (View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or
-                View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR).inv()
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
 
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -350,8 +362,9 @@ class SnapshotViewerActivity : Activity() {
         // 不受查看区图片留白和内容 inset 影响；普通模式保持原有 root 层级。
         if (blurBackground) {
             root.background = ColorDrawable(Color.TRANSPARENT)
-            window.decorView.background = ambientBackground
         }
+        root.visibility = View.INVISIBLE
+        registerBackCallback()
         overridePendingTransition(0, 0)
 
         applySystemBarInsets()
@@ -379,7 +392,10 @@ class SnapshotViewerActivity : Activity() {
      */
     private fun applySystemBarInsets() {
         ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            // 将刘海/挖孔安全区并入系统栏 inset，避免 Android 16 edge-to-edge 下内容压到 cutout。
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
             val top = if (bars.top > 0) bars.top else systemDimen("status_bar_height")
             val bottom = if (bars.bottom > 0) bars.bottom else systemDimen("navigation_bar_height")
             v.setPadding(0, top, 0, 0)
@@ -443,6 +459,8 @@ class SnapshotViewerActivity : Activity() {
                     viewB.visibility = View.GONE
                     failText.visibility = View.VISIBLE
                     if (!openingStarted) {
+                        root.visibility = View.VISIBLE
+                        attachBlurBackgroundIfNeeded()
                         openingStarted = true
                         playEnter()
                     }
@@ -533,7 +551,21 @@ class SnapshotViewerActivity : Activity() {
     override fun onDestroy() {
         // 处理系统返回、来源 App 返回等非 finishWithExit 路径。
         restoreBubbleAfterClose()
+        transitionAnimator?.cancel()
+        transitionAnimator = null
+        backPressedCallback?.remove()
+        backPressedCallback = null
         super.onDestroy()
+    }
+
+    /** 使用 AndroidX 返回分发器兼容 Android 12–16，并统一导向自定义退场动画。 */
+    private fun registerBackCallback() {
+        backPressedCallback?.remove()
+        backPressedCallback = object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                finishWithExit()
+            }
+        }.also { onBackPressedDispatcher.addCallback(this, it) }
     }
 
     private fun restoreBubbleAfterClose() {
@@ -550,6 +582,7 @@ class SnapshotViewerActivity : Activity() {
 
     /** 从气泡原点缩小态放大到全屏，背景/系统栏同步淡入；模糊模式还联动模糊半径。 */
     private fun playEnter() {
+        transitionAnimator?.cancel()
         val s0: Float
         val tx0: Float
         val ty0: Float
@@ -599,6 +632,7 @@ class SnapshotViewerActivity : Activity() {
         }
         anim.addListener(object : AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: Animator) {
+                if (exiting) return
                 area.translationX = 0f
                 area.translationY = 0f
                 area.scaleX = 1f
@@ -612,8 +646,10 @@ class SnapshotViewerActivity : Activity() {
                     window.attributes = lp
                 }
                 showBar()
+                if (transitionAnimator === animation) transitionAnimator = null
             }
         })
+        transitionAnimator = anim
         anim.start()
     }
 
@@ -621,6 +657,10 @@ class SnapshotViewerActivity : Activity() {
     private fun finishWithExit() {
         if (exiting) return
         exiting = true
+        // 预测性返回回调和旧式 onBackPressed 可能在同一条返回链路中都到达；
+        // 除了 exiting 防重入，还要取消尚未结束的入场过渡，防止它继续改写 alpha/scale。
+        transitionAnimator?.cancel()
+        transitionAnimator = null
         viewA.animate().cancel()
         viewB.animate().cancel()
         area.animate().cancel()
@@ -675,11 +715,13 @@ class SnapshotViewerActivity : Activity() {
         }
         anim.addListener(object : AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: Animator) {
+                if (transitionAnimator === animation) transitionAnimator = null
                 restoreBubbleAfterClose()
                 finish()
                 overridePendingTransition(0, 0)
             }
         })
+        transitionAnimator = anim
         anim.start()
     }
 
@@ -711,6 +753,8 @@ class SnapshotViewerActivity : Activity() {
      */
     private fun showBitmap(bitmap: Bitmap, fromX: Float?) {
         ambientBackground.animateAccentColor(sampleAmbientColor(bitmap))
+        if (!blurBackgroundAttached) attachBlurBackgroundIfNeeded()
+        root.visibility = View.VISIBLE
         val incoming = if (front === viewA) viewB else viewA
         val outgoing = front
         // 可能打断上一次滑动：先把两边动画停掉、归位，避免残留位移叠到新动画上
@@ -773,6 +817,12 @@ class SnapshotViewerActivity : Activity() {
         v.alpha = 1f
         v.translationX = 0f
         v.visibility = View.GONE
+    }
+
+    private fun attachBlurBackgroundIfNeeded() {
+        if (!blurBackground || blurBackgroundAttached) return
+        window.decorView.background = ambientBackground
+        blurBackgroundAttached = true
     }
 
     /** 从当前截图提取低频主色，只用于背景氛围，不改变原图颜色。 */
@@ -963,11 +1013,6 @@ class SnapshotViewerActivity : Activity() {
         }
         val next = if (removed >= uris.size) uris.size - 1 else removed
         showIndex(next, force = true)
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        finishWithExit()
     }
 
     /** 左侧按钮动作：按开关分派到“保存到相册”或“删除相册图片”，不关闭查看框。 */

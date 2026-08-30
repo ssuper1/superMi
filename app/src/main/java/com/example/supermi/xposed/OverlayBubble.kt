@@ -493,7 +493,7 @@ object OverlayBubble {
     )
 
     private fun rebuildSnapshotBubble(ctx: Context) {
-        val values = snapshotStyle ?: return
+        val values = snapshotStyle ?: readBubbleValues(ctx).also { snapshotStyle = it }
         showSnapshotBubble(ctx, values)
     }
 
@@ -639,14 +639,17 @@ object OverlayBubble {
                 putExtra(SnapshotViewerActivity.EXTRA_ORIGIN_W, originW)
                 putExtra(SnapshotViewerActivity.EXTRA_ORIGIN_H, originH)
             }
+            // 先同步标记查看器状态，再启动 Activity，避免不同设备上恢复/隐藏任务乱序。
+            snapshotViewerOpen = true
             ctx.startActivity(intent)
             // 查看器已拿到气泡原点坐标；启动成功后移除气泡，避免遮挡查看内容。
             // 用 post 避免在当前 ImageView 点击分发过程中直接移除父窗口。
             mainHandler.post {
-                snapshotViewerOpen = true
-                dismissSnapshot()
+                // 若查看器已快速退出并完成恢复，不再执行过期的隐藏任务。
+                if (snapshotViewerOpen) dismissSnapshot()
             }
         } catch (t: Throwable) {
+            snapshotViewerOpen = false
             XposedBridge.log("$TAG openSnapshotViewer failed: $t")
         }
     }
