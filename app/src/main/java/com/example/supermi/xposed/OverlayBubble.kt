@@ -42,6 +42,7 @@ object OverlayBubble {
     private const val RESOLVE_CACHE_SIZE = 16
     private const val RESOLVE_CACHE_TTL_MS = 30_000L
     private const val VIEWER_STALE_MS = 2_000L
+    private const val VIEWER_RESTORE_BUBBLE_TTL_MS = 10_000L
     private const val DELETE_MATCH_WINDOW_MS = 3_000L
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -67,6 +68,10 @@ object OverlayBubble {
     private var snapshotBubbleAllowedWhileViewerOpen = false
     /** 防止查看器异常退出/广播丢失后永久阻塞后续截图气泡。 */
     private var snapshotViewerOpenedAt = 0L
+    /** 当前截图会话的自动关闭绝对截止时间；查看器打开期间也继续计时。 */
+    private var snapshotAutoCloseDeadlineMs = 0L
+    /** 自动关闭已在查看器打开期间到期，等待查看器退出后进入 10 秒宽限。 */
+    private var snapshotAutoCloseExpiredWhileViewerOpen = false
 
     private data class ResolveCacheKey(
         val type: ContentClassifier.ContentType,
@@ -253,6 +258,8 @@ object OverlayBubble {
                             snapshotUris.clear()
                             snapshotSources.clear()
                             snapshotBitmaps.clear()
+                            snapshotAutoCloseDeadlineMs = 0L
+                            snapshotAutoCloseExpiredWhileViewerOpen = false
                         }
                         snapshotUris.removeAll(stale)
                         stale.forEach {
@@ -304,16 +311,38 @@ object OverlayBubble {
         }
     }
 
-    /** 定时关闭到期：清空本次截图并通知 app 走完整删除链路（删缓存 + 按开关删相册原图）。 */
-    private fun scheduleSnapshotAutoClose(ctx: Context, values: BubbleValues) {
+    /** 定时关闭到期：普通场景清空截图；查看器打开时只进入退出后的宽限状态。 */
+    private fun scheduleSnapshotAutoClose(
+        ctx: Context,
+        values: BubbleValues,
+        ttlMs: Long? = null,
+        deadlineMs: Long? = null
+    ) {
         if (!values.autoClose) return
+        snapshotDismiss?.let { mainHandler.removeCallbacks(it) }
+        snapshotDismiss = null
+        val deadline = deadlineMs ?: (SystemClock.uptimeMillis() + (ttlMs ?: values.ttlMs))
+        snapshotAutoCloseDeadlineMs = deadline
+        snapshotAutoCloseExpiredWhileViewerOpen = false
         val dr = Runnable {
             try {
+                snapshotDismiss = null
+                // 查看器仍在使用截图时，TTL 只结束当前气泡显示，不删除队列或缓存。
+                if (snapshotViewerOpen) {
+                    snapshotBubbleAllowedWhileViewerOpen = false
+                    snapshotAutoCloseDeadlineMs = 0L
+                    snapshotAutoCloseExpiredWhileViewerOpen = true
+                    removeSnapshotBubble()
+                    sysLog("定时关闭到期但查看器仍打开，仅关闭气泡，保留截图")
+                    return@Runnable
+                }
                 snapshotUris.clear()
                 snapshotSources.clear()
                 snapshotBitmaps.clear()
+                snapshotAutoCloseDeadlineMs = 0L
+                snapshotAutoCloseExpiredWhileViewerOpen = false
                 snapshotBubbleAllowedWhileViewerOpen = false
-                dismissSnapshot()
+                removeSnapshotBubble()
                 ctx.sendBroadcast(
                     Intent("com.example.supermi.CLEAR_SNAPSHOTS").setPackage("com.example.supermi")
                 )
@@ -323,7 +352,7 @@ object OverlayBubble {
             }
         }
         snapshotDismiss = dr
-        mainHandler.postDelayed(dr, values.ttlMs)
+        mainHandler.postDelayed(dr, (deadline - SystemClock.uptimeMillis()).coerceAtLeast(0L))
     }
 
     fun deleteSnapshot(
@@ -655,20 +684,31 @@ object OverlayBubble {
         dismissMs = BubblePrefs.dismissMs(ctx)
     )
 
-    private fun rebuildSnapshotBubble(ctx: Context) {
+    private fun rebuildSnapshotBubble(ctx: Context, preserveAutoClose: Boolean = false) {
         val values = snapshotStyle ?: readBubbleValues(ctx).also { snapshotStyle = it }
-        showSnapshotBubble(ctx, values)
+        showSnapshotBubble(ctx, values, preserveAutoClose = preserveAutoClose)
     }
 
-    /** 查看框退出后，按仍然存在的截图队列恢复气泡。 */
+    /** 查看框退出后恢复气泡：未到期继续原计时，已到期进入 10 秒宽限。 */
     fun restoreSnapshotBubble() {
         val ctx = systemContext() ?: return
         mainHandler.post {
             snapshotViewerOpen = false
             snapshotViewerOpenedAt = 0L
             snapshotBubbleAllowedWhileViewerOpen = false
-            if (snapshotView == null && snapshotUris.isNotEmpty()) {
-                rebuildSnapshotBubble(ctx)
+            if (snapshotUris.isNotEmpty()) {
+                val values = snapshotStyle ?: readBubbleValues(ctx).also { snapshotStyle = it }
+                val deadlinePassed = snapshotAutoCloseDeadlineMs > 0L &&
+                    SystemClock.uptimeMillis() >= snapshotAutoCloseDeadlineMs
+                val needsGrace = values.autoClose &&
+                    (snapshotAutoCloseExpiredWhileViewerOpen || deadlinePassed)
+                if (needsGrace) {
+                    snapshotAutoCloseExpiredWhileViewerOpen = false
+                    snapshotAutoCloseDeadlineMs = 0L
+                    showSnapshotBubble(ctx, values, ttlMs = VIEWER_RESTORE_BUBBLE_TTL_MS)
+                } else {
+                    showSnapshotBubble(ctx, values, preserveAutoClose = true)
+                }
             }
         }
     }
@@ -679,13 +719,22 @@ object OverlayBubble {
         mainHandler.post {
             if (snapshotViewerOpen && snapshotUris.isNotEmpty()) {
                 snapshotBubbleAllowedWhileViewerOpen = true
-                rebuildSnapshotBubble(ctx)
+                rebuildSnapshotBubble(ctx, preserveAutoClose = true)
             }
         }
     }
 
-    private fun showSnapshotBubble(ctx: Context, values: BubbleValues) {
-        dismissSnapshot()
+    private fun showSnapshotBubble(
+        ctx: Context,
+        values: BubbleValues,
+        ttlMs: Long? = null,
+        preserveAutoClose: Boolean = false
+    ) {
+        if (preserveAutoClose) {
+            removeSnapshotBubble()
+        } else {
+            dismissSnapshot()
+        }
         if (snapshotUris.isEmpty()) return
         val n = snapshotUris.size.coerceIn(1, 3)
         val size = values.iconSizeDp
@@ -745,15 +794,29 @@ object OverlayBubble {
             snapshotView = row
             snapshotStyle = values
             XposedBridge.log("$TAG snapshot bubble added x=${params.x} y=${params.y} count=$n")
-            scheduleSnapshotAutoClose(ctx, values)
+            if (preserveAutoClose) {
+                if (values.autoClose && !snapshotAutoCloseExpiredWhileViewerOpen &&
+                    snapshotDismiss == null
+                ) {
+                    if (snapshotAutoCloseDeadlineMs > SystemClock.uptimeMillis()) {
+                        scheduleSnapshotAutoClose(
+                            ctx,
+                            values,
+                            deadlineMs = snapshotAutoCloseDeadlineMs
+                        )
+                    } else if (snapshotAutoCloseDeadlineMs == 0L) {
+                        scheduleSnapshotAutoClose(ctx, values)
+                    }
+                }
+            } else {
+                scheduleSnapshotAutoClose(ctx, values, ttlMs)
+            }
         } catch (t: Throwable) {
             XposedBridge.log("$TAG snapshot bubble add failed: $t")
         }
     }
 
-    private fun dismissSnapshot() {
-        snapshotDismiss?.let { mainHandler.removeCallbacks(it) }
-        snapshotDismiss = null
+    private fun removeSnapshotBubble() {
         val v = snapshotView
         val ctx = systemContext()
         if (v != null && ctx != null) {
@@ -764,6 +827,14 @@ object OverlayBubble {
         }
         snapshotParams = null
         snapshotView = null
+    }
+
+    private fun dismissSnapshot() {
+        snapshotDismiss?.let { mainHandler.removeCallbacks(it) }
+        snapshotDismiss = null
+        snapshotAutoCloseDeadlineMs = 0L
+        snapshotAutoCloseExpiredWhileViewerOpen = false
+        removeSnapshotBubble()
     }
 
     /** 圆角方形缩略图：CENTER_CROP 裁切，圆角按图标尺寸的 1/4。 */
@@ -825,7 +896,7 @@ object OverlayBubble {
             // 用 post 避免在当前 ImageView 点击分发过程中直接移除父窗口。
             mainHandler.post {
                 // 若查看器已快速退出并完成恢复，不再执行过期的隐藏任务。
-                if (snapshotViewerOpen) dismissSnapshot()
+                if (snapshotViewerOpen) removeSnapshotBubble()
             }
         } catch (t: Throwable) {
             snapshotViewerOpen = false

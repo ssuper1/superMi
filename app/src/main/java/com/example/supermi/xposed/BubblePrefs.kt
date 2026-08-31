@@ -92,7 +92,7 @@ object BubblePrefs {
     const val DEFAULT_SNAPSHOT_CORNER_DP = 12
     const val DEFAULT_SNAPSHOT_BG_BLUR = false
     /** true=优先按截图文件名判断来源，失败回退时间判断；false=始终按时间判断。 */
-    const val DEFAULT_SNAPSHOT_SOURCE_BY_NAME = false
+    const val DEFAULT_SNAPSHOT_SOURCE_BY_NAME = true
     const val DEFAULT_SNAPSHOT_DELETE_HOURS = 6
     const val DEFAULT_SNAPSHOT_DIR = ""
     const val SNAPSHOT_CORNER_MIN = 0
