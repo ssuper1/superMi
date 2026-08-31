@@ -110,6 +110,7 @@ object OverlayBubble {
         val autoClose: Boolean,
         val ttlMs: Long,
         val autoClean: Boolean,
+        val clickOpenSource: Boolean,
         val dismissMs: Long
     ) {
         fun xOffset(count: Int): Int = when (count.coerceIn(1, 3)) {
@@ -681,6 +682,7 @@ object OverlayBubble {
         autoClose = BubblePrefs.snapshotAutoClose(ctx),
         ttlMs = BubblePrefs.snapshotTtlMs(ctx),
         autoClean = BubblePrefs.snapshotAutoClean(ctx),
+        clickOpenSource = BubblePrefs.snapshotClickOpenSource(ctx),
         dismissMs = BubblePrefs.dismissMs(ctx)
     )
 
@@ -707,6 +709,20 @@ object OverlayBubble {
                     snapshotAutoCloseDeadlineMs = 0L
                     showSnapshotBubble(ctx, values, ttlMs = VIEWER_RESTORE_BUBBLE_TTL_MS)
                 } else {
+                    showSnapshotBubble(ctx, values, preserveAutoClose = true)
+                }
+            }
+        }
+    }
+
+    /** 设置“点击气泡后”改变时，立即刷新当前截图气泡的图标样式。 */
+    fun refreshSnapshotBubble() {
+        val ctx = systemContext() ?: return
+        bgHandler.post {
+            val values = readBubbleValues(ctx)
+            mainHandler.post {
+                snapshotStyle = values
+                if (snapshotUris.isNotEmpty() && snapshotView != null && !snapshotViewerOpen) {
                     showSnapshotBubble(ctx, values, preserveAutoClose = true)
                 }
             }
@@ -758,14 +774,42 @@ object OverlayBubble {
         }
         for ((index, itemUri) in snapshotUris.withIndex()) {
             val image = roundedSnapshotImage(ctx, size).apply {
-                snapshotBitmaps[itemUri]?.let { setImageDrawable(BitmapDrawable(ctx.resources, it)) }
+                val sourceIcon = if (values.clickOpenSource) {
+                    snapshotSources[itemUri]?.packageName?.let { pkg ->
+                        runCatching { ctx.packageManager.getApplicationIcon(pkg) }.getOrNull()
+                    }
+                } else {
+                    null
+                }
+                if (sourceIcon != null) {
+                    setImageDrawable(
+                        com.example.supermi.IconUtil.rounded(
+                            sourceIcon,
+                            dp(size),
+                            dp(size / 4).toFloat(),
+                            ctx.resources
+                        )
+                    )
+                } else {
+                    snapshotBitmaps[itemUri]?.let { setImageDrawable(BitmapDrawable(ctx.resources, it)) }
+                }
                 setOnClickListener {
+                    if (BubblePrefs.snapshotClickOpenSourceFresh(ctx) &&
+                        openSnapshotSourceApp(ctx, itemUri)
+                    ) {
+                        return@setOnClickListener
+                    }
                     val loc = IntArray(2)
                     getLocationOnScreen(loc)
                     openSnapshotViewer(
                         ctx, snapshotUris.toList(), index,
                         loc[0], loc[1], width, height
                     )
+                }
+                setOnLongClickListener {
+                    requestSnapshotDelete(ctx, itemUri)
+                    dismiss()
+                    true
                 }
             }
             val lp = LinearLayout.LayoutParams(dp(size), dp(size))
@@ -847,6 +891,36 @@ object OverlayBubble {
                     outline.setRoundRect(0, 0, view.width, view.height, dp(size / 4).toFloat())
                 }
             }
+        }
+    }
+
+    /** 点击气泡直达来源 App；来源未知、无启动入口或启动失败时回退到查看框。 */
+    private fun openSnapshotSourceApp(ctx: Context, uri: Uri): Boolean {
+        val pkg = snapshotSources[uri]?.packageName?.takeIf { it.isNotBlank() } ?: return false
+        return try {
+            val launch = ctx.packageManager.getLaunchIntentForPackage(pkg) ?: return false
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(launch)
+            XposedBridge.log("$TAG snapshot direct source launch pkg=$pkg")
+            true
+        } catch (t: Throwable) {
+            XposedBridge.log("$TAG snapshot direct source launch failed pkg=$pkg: $t")
+            false
+        }
+    }
+
+    /** 请求 App 进程走完整删除链路，再关闭当前复制气泡。 */
+    private fun requestSnapshotDelete(ctx: Context, uri: Uri) {
+        try {
+            ctx.sendBroadcast(
+                Intent("com.example.supermi.DELETE_SNAPSHOT_FROM_BUBBLE")
+                    .setPackage("com.example.supermi")
+                    .putExtra("snapshot_uri", uri.toString()),
+                "com.example.supermi.permission.SHOW_SNAPSHOT"
+            )
+            XposedBridge.log("$TAG snapshot long press delete requested uri=$uri")
+        } catch (t: Throwable) {
+            XposedBridge.log("$TAG snapshot long press delete request failed: $t")
         }
     }
 

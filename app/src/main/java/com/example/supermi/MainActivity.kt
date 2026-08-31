@@ -83,6 +83,7 @@ class MainActivity : AppCompatActivity() {
     private var snapshotDeleteHours: Int = BubblePrefs.DEFAULT_SNAPSHOT_DELETE_HOURS
     private var snapshotAutoClose: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_AUTO_CLOSE
     private var snapshotOpenSourceClose: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE
+    private var snapshotClickOpenSource: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_CLICK_OPEN_SOURCE
     private var snapshotCornerDp: Int = BubblePrefs.DEFAULT_SNAPSHOT_CORNER_DP
     private var snapshotBgBlur: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_BG_BLUR
     private var snapshotDir: String = BubblePrefs.DEFAULT_SNAPSHOT_DIR
@@ -286,6 +287,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_snap_timed).setOnClickListener { setSnapshotAutoClose(true) }
         applySnapshotCloseUi()
         updateSnapshotOpenSourceSeg()
+        updateSnapshotClickOpenSourceSeg()
+        findViewById<Button>(R.id.btn_snap_click_viewer).setOnClickListener { setSnapshotClickOpenSource(false) }
+        findViewById<Button>(R.id.btn_snap_click_source).setOnClickListener { setSnapshotClickOpenSource(true) }
         findViewById<Button>(R.id.btn_snap_return_close).setOnClickListener { setSnapshotOpenSourceReturnClose(true) }
         findViewById<Button>(R.id.btn_snap_return_viewer).setOnClickListener { setSnapshotOpenSourceReturnClose(false) }
         updateSnapshotBgSeg()
@@ -338,6 +342,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         snapshotCornerDp = BubblePosProvider.snapshotCornerDp
         refreshSnapshotCornerEntry()
+        notifySnapshotBubbleRefresh()
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
@@ -624,6 +629,40 @@ class MainActivity : AppCompatActivity() {
             btn.background = getDrawable(if (active) R.drawable.bg_seg_active else android.R.color.transparent)
             btn.backgroundTintList = null
             btn.setTextColor(resources.getColor(if (active) R.color.blue_text else R.color.text_tertiary, theme))
+        }
+    }
+
+    /** 更新“点击气泡后”分段按钮的选中样式。 */
+    private fun updateSnapshotClickOpenSourceSeg() {
+        val ids = mapOf(
+            false to R.id.btn_snap_click_viewer,
+            true to R.id.btn_snap_click_source
+        )
+        for ((v, id) in ids) {
+            val btn = findViewById<Button>(id)
+            val active = v == snapshotClickOpenSource
+            btn.background = getDrawable(if (active) R.drawable.bg_seg_active else android.R.color.transparent)
+            btn.backgroundTintList = null
+            btn.setTextColor(resources.getColor(if (active) R.color.blue_text else R.color.text_tertiary, theme))
+        }
+    }
+
+    private fun setSnapshotClickOpenSource(value: Boolean) {
+        snapshotClickOpenSource = value
+        updateSnapshotClickOpenSourceSeg()
+        saveConfig()
+        notifySnapshotBubbleRefresh()
+    }
+
+    /** 通知 system_server 立即刷新当前截图气泡的显示样式。 */
+    private fun notifySnapshotBubbleRefresh() {
+        try {
+            sendBroadcast(
+                Intent("com.example.supermi.REFRESH_SNAPSHOT_BUBBLE")
+                    .setPackage("android"),
+                "com.example.supermi.permission.SHOW_SNAPSHOT"
+            )
+        } catch (_: Throwable) {
         }
     }
 
@@ -1115,6 +1154,11 @@ class MainActivity : AppCompatActivity() {
         } else {
             fromSettings("snapshot_open_source_close", if (snapshotOpenSourceClose) 1 else 0) == 1
         }
+        snapshotClickOpenSource = if (m.containsKey(BubblePosProvider.KEY_SNAPSHOT_CLICK_OPEN_SOURCE)) {
+            m[BubblePosProvider.KEY_SNAPSHOT_CLICK_OPEN_SOURCE] != "0"
+        } else {
+            fromSettings("snapshot_click_open_source", if (snapshotClickOpenSource) 1 else 0) == 1
+        }
         snapshotBgBlur = if (m.containsKey(BubblePosProvider.KEY_SNAPSHOT_BG_BLUR)) {
             m[BubblePosProvider.KEY_SNAPSHOT_BG_BLUR] != "0"
         } else {
@@ -1158,6 +1202,7 @@ class MainActivity : AppCompatActivity() {
         BubblePosProvider.snapshotDeleteHours = snapshotDeleteHours
         BubblePosProvider.snapshotAutoClose = snapshotAutoClose
         BubblePosProvider.snapshotOpenSourceClose = snapshotOpenSourceClose
+        BubblePosProvider.snapshotClickOpenSource = snapshotClickOpenSource
         BubblePosProvider.snapshotBgBlur = snapshotBgBlur
         BubblePosProvider.snapshotCornerDp = snapshotCornerDp
         BubblePosProvider.snapshotDir = snapshotDir
@@ -1196,6 +1241,7 @@ class MainActivity : AppCompatActivity() {
         m[BubblePosProvider.KEY_SNAPSHOT_DELETE_HOURS] = "$snapshotDeleteHours"
         m[BubblePosProvider.KEY_SNAPSHOT_AUTO_CLOSE] = if (snapshotAutoClose) "1" else "0"
         m[BubblePosProvider.KEY_SNAPSHOT_OPEN_SOURCE_CLOSE] = if (snapshotOpenSourceClose) "1" else "0"
+        m[BubblePosProvider.KEY_SNAPSHOT_CLICK_OPEN_SOURCE] = if (snapshotClickOpenSource) "1" else "0"
         m[BubblePosProvider.KEY_SNAPSHOT_BG_BLUR] = if (snapshotBgBlur) "1" else "0"
         m[BubblePosProvider.KEY_SNAPSHOT_CORNER_DP] = "$snapshotCornerDp"
         m[BubblePosProvider.KEY_SNAPSHOT_DIR] = snapshotDir
@@ -1225,6 +1271,7 @@ class MainActivity : AppCompatActivity() {
                 this[BubblePosProvider.KEY_SNAPSHOT_DELETE_HOURS] = snapshotDeleteHours.toString()
                 this[BubblePosProvider.KEY_SNAPSHOT_AUTO_CLOSE] = if (snapshotAutoClose) "1" else "0"
                 this[BubblePosProvider.KEY_SNAPSHOT_OPEN_SOURCE_CLOSE] = if (snapshotOpenSourceClose) "1" else "0"
+                this[BubblePosProvider.KEY_SNAPSHOT_CLICK_OPEN_SOURCE] = if (snapshotClickOpenSource) "1" else "0"
                 this[BubblePosProvider.KEY_SNAPSHOT_BG_BLUR] = if (snapshotBgBlur) "1" else "0"
                 this[BubblePosProvider.KEY_SNAPSHOT_CORNER_DP] = snapshotCornerDp.toString()
                 this[BubblePosProvider.KEY_SNAPSHOT_DIR] = snapshotDir

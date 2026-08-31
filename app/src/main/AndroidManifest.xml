@@ -109,6 +109,14 @@
                 <action android:name="com.example.supermi.CLEAR_SNAPSHOTS" />
             </intent-filter>
         </receiver>
+        <receiver
+            android:name=".SnapshotDeleteReceiver"
+            android:exported="true"
+            android:permission="com.example.supermi.permission.SHOW_SNAPSHOT">
+            <intent-filter>
+                <action android:name="com.example.supermi.DELETE_SNAPSHOT_FROM_BUBBLE" />
+            </intent-filter>
+        </receiver>
         <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>

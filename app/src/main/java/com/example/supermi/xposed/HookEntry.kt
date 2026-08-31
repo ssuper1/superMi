@@ -150,10 +150,13 @@ class HookEntry : IXposedHookLoadPackage {
             val filter = IntentFilter().apply {
                 addAction("com.example.supermi.RESTORE_SNAPSHOT")
                 addAction("com.example.supermi.SHOW_SNAPSHOT_FOR_SOURCE")
+                addAction("com.example.supermi.REFRESH_SNAPSHOT_BUBBLE")
             }
             ctx.registerReceiver(object : BroadcastReceiver() {
                 override fun onReceive(context: Context, intent: Intent) {
-                    if (intent.action == "com.example.supermi.SHOW_SNAPSHOT_FOR_SOURCE") {
+                    if (intent.action == "com.example.supermi.REFRESH_SNAPSHOT_BUBBLE") {
+                        OverlayBubble.refreshSnapshotBubble()
+                    } else if (intent.action == "com.example.supermi.SHOW_SNAPSHOT_FOR_SOURCE") {
                         OverlayBubble.showSnapshotBubbleWhileViewerOpen()
                     } else {
                         OverlayBubble.restoreSnapshotBubble()

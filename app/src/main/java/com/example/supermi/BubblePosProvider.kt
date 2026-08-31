@@ -47,6 +47,7 @@ class BubblePosProvider : ContentProvider() {
         const val KEY_SNAPSHOT_DELETE_HOURS = "snapshot_delete_hours"
         const val KEY_SNAPSHOT_AUTO_CLOSE = "snapshot_auto_close"
         const val KEY_SNAPSHOT_OPEN_SOURCE_CLOSE = "snapshot_open_source_close"
+        const val KEY_SNAPSHOT_CLICK_OPEN_SOURCE = "snapshot_click_open_source"
         const val KEY_SNAPSHOT_BG_BLUR = "snapshot_bg_blur"
         const val KEY_SNAPSHOT_CORNER_DP = "snapshot_corner_dp"
         const val KEY_SNAPSHOT_DIR = "snapshot_dir"
@@ -129,6 +130,7 @@ class BubblePosProvider : ContentProvider() {
         @Volatile var snapshotDeleteHours: Int = BubblePrefs.DEFAULT_SNAPSHOT_DELETE_HOURS
         @Volatile var snapshotAutoClose: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_AUTO_CLOSE
         @Volatile var snapshotOpenSourceClose: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE
+        @Volatile var snapshotClickOpenSource: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_CLICK_OPEN_SOURCE
         @Volatile var snapshotBgBlur: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_BG_BLUR
         @Volatile var snapshotCornerDp: Int = BubblePrefs.DEFAULT_SNAPSHOT_CORNER_DP
         @Volatile var snapshotDir: String = BubblePrefs.DEFAULT_SNAPSHOT_DIR
@@ -186,6 +188,7 @@ class BubblePosProvider : ContentProvider() {
                     KEY_SNAPSHOT_DELETE_HOURS -> snapshotDeleteHours = v.toIntOrNull()?.coerceIn(BubblePrefs.SNAPSHOT_DELETE_HOURS_MIN, BubblePrefs.SNAPSHOT_DELETE_HOURS_MAX) ?: snapshotDeleteHours
                     KEY_SNAPSHOT_AUTO_CLOSE -> snapshotAutoClose = v != "0"
                     KEY_SNAPSHOT_OPEN_SOURCE_CLOSE -> snapshotOpenSourceClose = v != "0"
+                    KEY_SNAPSHOT_CLICK_OPEN_SOURCE -> snapshotClickOpenSource = v != "0"
                     KEY_SNAPSHOT_BG_BLUR -> snapshotBgBlur = v != "0"
                     KEY_SNAPSHOT_CORNER_DP -> snapshotCornerDp = v.toIntOrNull()?.coerceIn(BubblePrefs.SNAPSHOT_CORNER_MIN, BubblePrefs.SNAPSHOT_CORNER_MAX) ?: snapshotCornerDp
                     KEY_SNAPSHOT_DIR -> snapshotDir = v
@@ -244,6 +247,7 @@ class BubblePosProvider : ContentProvider() {
             putInt(KEY_SNAPSHOT_DELETE_HOURS, snapshotDeleteHours)
             putBoolean(KEY_SNAPSHOT_AUTO_CLOSE, snapshotAutoClose)
             putBoolean(KEY_SNAPSHOT_OPEN_SOURCE_CLOSE, snapshotOpenSourceClose)
+            putBoolean(KEY_SNAPSHOT_CLICK_OPEN_SOURCE, snapshotClickOpenSource)
             putBoolean(KEY_SNAPSHOT_BG_BLUR, snapshotBgBlur)
             putInt(KEY_SNAPSHOT_CORNER_DP, snapshotCornerDp)
             putString(KEY_SNAPSHOT_DIR, snapshotDir)
