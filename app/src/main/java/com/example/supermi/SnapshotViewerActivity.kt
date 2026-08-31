@@ -12,12 +12,9 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Outline
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.RadialGradient
-import android.graphics.RectF
 import android.graphics.Shader
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.Drawable
@@ -26,6 +23,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.WindowManager
 import android.view.animation.AccelerateInterpolator
@@ -42,7 +40,6 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.supermi.xposed.BubblePrefs
 import java.util.LinkedHashMap
-import java.util.Random
 
 /**
  * 截图多图查看框：从气泡位置放大入场/收回气泡退场，
@@ -77,6 +74,7 @@ class SnapshotViewerActivity : ComponentActivity() {
     private var blurRadiusPx = 0
     private var restoreBubbleSent = false
     private var blurBackgroundAttached = false
+    private var ambientBackgroundView: View? = null
     private var backPressedCallback: OnBackPressedCallback? = null
     /** 当前入场/退场过渡；返回时必须取消入场动画，避免两个动画同时改写同一组属性。 */
     private var transitionAnimator: ValueAnimator? = null
@@ -118,10 +116,9 @@ class SnapshotViewerActivity : ComponentActivity() {
         originH = intent.getIntExtra(EXTRA_ORIGIN_H, 0)
         hasOrigin = originX >= 0 && originY >= 0 && originW > 0 && originH > 0
         blurBackground = BubblePrefs.snapshotBgBlur(this)
-        // 普通模式使用氛围背景；模糊模式使用更明显的系统背景模糊，
-        // 再叠加半透明材质层、高光和细砂噪点，尽量接近系统级磨砂玻璃。
-        // 设备不支持跨窗口模糊时，这个值会被系统忽略，仍保留材质层作为降级效果。
-        blurRadiusPx = if (blurBackground) dp(44) else 0
+        // 普通模式使用氛围背景；模糊模式使用系统背景模糊和一整块连续玻璃材质。
+        // 设备不支持跨窗口模糊时，这个值会被系统忽略，材质层仍可独立降级。
+        blurRadiusPx = if (blurBackground) dp(48) else 0
 
         val window = window
         // 查看框只绘制在系统栏下方，顶部状态栏保持透明露出底层界面
@@ -130,15 +127,18 @@ class SnapshotViewerActivity : ComponentActivity() {
         // 避免直接改 decorView/systemUiVisibility 在不同版本上互相覆盖。
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
+        // 导航栏保持透明，底部区域由 bar 自身的背景和 bottom padding 统一绘制。
         window.navigationBarColor = Color.TRANSPARENT
         window.isStatusBarContrastEnforced = false
         window.isNavigationBarContrastEnforced = false
+        window.navigationBarDividerColor = Color.TRANSPARENT
         if (blurBackground) {
             window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
         }
-        // 黑底/半透明蒙版都应配浅色状态栏/导航栏图标，去掉主题里的深色图标标志
+        // 顶部状态栏保持透明、位置和底层页面不变；白色雾面档使用深色图标，
+        // 避免底层白色页面上出现白色状态栏文字。普通黑底档仍使用浅色图标。
         WindowInsetsControllerCompat(window, window.decorView).apply {
-            isAppearanceLightStatusBars = false
+            isAppearanceLightStatusBars = blurBackground
             isAppearanceLightNavigationBars = false
         }
 
@@ -147,11 +147,16 @@ class SnapshotViewerActivity : ComponentActivity() {
             ambientBackground = AmbientBackgroundDrawable()
             ambientBackground.dynamic = !blurBackground
             ambientBackground.blurGlass = blurBackground
-            ambientBackground.cornerRadiusPx = if (blurBackground) dp(20).toFloat() else 0f
             background = ambientBackground
         }
 
-        area = FrameLayout(this)
+        area = FrameLayout(this).apply {
+            // 将白色透明雾面覆盖整个图片区域，让图片四周与图片内部使用同一效果。
+            // 这是前景层，因此照片会整体轻微提亮，保持透明白雾观感。
+            if (blurBackground) {
+                foreground = ColorDrawable(Color.argb(0x1A, 255, 255, 255))
+            }
+        }
         fun newImageView(): ZoomableImageView {
             val cornerDp = BubblePrefs.snapshotCornerDpFresh(this)
             return ZoomableImageView(this).apply {
@@ -176,8 +181,7 @@ class SnapshotViewerActivity : ComponentActivity() {
                 setCornerRadius(dp(cornerDp).toFloat())
                 // 图片更贴近底部按钮行
                 setBaseInset(dp(4).toFloat())
-                // 仅模糊模式增加轻微悬浮层次，普通模式保持原样。
-                if (blurBackground) elevation = dp(6).toFloat()
+                // 不给图片增加 elevation，避免在图片边缘制造额外层次。
                 clipToOutline = true
                 outlineProvider = object : ViewOutlineProvider() {
                     override fun getOutline(view: View, outline: Outline) {
@@ -195,32 +199,9 @@ class SnapshotViewerActivity : ComponentActivity() {
         viewA = newImageView()
         viewB = newImageView()
         front = viewA
-        // 深色磨砂：在系统模糊之上平铺一层细砂噪点，形成磨砂玻璃的颗粒观感；
-        // 非模糊模式保持原有纯黑底，这一层不参与布局
-        val noise = View(this)
-        noise.visibility = if (blurBackground) View.VISIBLE else View.GONE
-        if (blurBackground) {
-            val size = 96
-            val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-            val rand = Random()
-            for (y in 0 until size) {
-                for (x in 0 until size) {
-                    val v = 55 + rand.nextInt(36)
-                    bmp.setPixel(x, y, Color.argb(6 + rand.nextInt(5), v, v, v))
-                }
-            }
-            val bd = BitmapDrawable(resources, bmp)
-            bd.setTileModeXY(Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
-            noise.background = bd
-        }
-        area.addView(
-            noise,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
-        // 层级：噪点层最底，failText 在上，两张图片最顶；切换时用 bringChildToFront 控制谁在前
+        // 细砂纹理现在由 Decor 层的 AmbientBackgroundDrawable 绘制，
+        // 不再作为 area 子 View，因此会从状态栏上沿开始，并且始终位于图片下方。
+        // 层级：Decor 玻璃背景/细砂在最底，failText 在上，两张图片最顶。
         failText = TextView(this).apply {
             text = "图片无法读取"
             setTextColor(0xFF9CA3AF.toInt())
@@ -261,18 +242,18 @@ class SnapshotViewerActivity : ComponentActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(10), dp(5), dp(10), dp(5))
-            // 玻璃面板：上缘保留透光感、下缘加深以托住按钮，同时保留一条柔和高光边；
-            // 黑底模式改用浅炭灰 + 顶部细线，和纯黑背景拉开层次
+            // 底部操作栏是功能控件面板；全屏背景本身只负责白色透明模糊。
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 if (blurBackground) {
-                    orientation = GradientDrawable.Orientation.TOP_BOTTOM
-                    colors = intArrayOf(0x301C1C1E.toInt(), 0x9A14171B.toInt())
+                    // 仅给控件行增加可读性遮罩；它不是全屏背景，不影响上方的单层白色模糊。
+                    setColor(0x26000000)
+                    setStroke(dp(1), 0x38FFFFFF)
                 } else {
                     // 普通模式保持原先明确的深黑操作区，不让氛围色冲淡底部层次。
                     setColor(0xFF151619.toInt())
                 }
-                setStroke(dp(1), if (blurBackground) 0x55FFFFFF else 0x33FFFFFF.toInt())
+                if (!blurBackground) setStroke(dp(1), 0x33FFFFFF.toInt())
                 cornerRadii = floatArrayOf(
                     dp(20).toFloat(), dp(20).toFloat(),
                     dp(20).toFloat(), dp(20).toFloat(),
@@ -289,7 +270,7 @@ class SnapshotViewerActivity : ComponentActivity() {
             setTextColor(Color.WHITE)
             textSize = 11f
             setPadding(dp(14), dp(7), dp(14), dp(7))
-            // 复用样式文档的毛玻璃片：20% 白填充 + 40% 白描边
+            // 深色半透明按钮，避免操作栏重新变成灰色玻璃面板。
             background = glass(12)
             setOnClickListener { onSideAction() }
         }
@@ -334,7 +315,7 @@ class SnapshotViewerActivity : ComponentActivity() {
         // 右侧：多图时显示页码，保持「取消展示」居中
         pageIndicator = TextView(this).apply {
             setTextColor(0xFFE7E9EE.toInt())
-            setShadowLayer(dp(2).toFloat(), 0f, dp(1).toFloat(), 0x66000000.toInt())
+            setShadowLayer(dp(2).toFloat(), 0f, dp(1).toFloat(), 0xAA000000.toInt())
             textSize = 12f
             gravity = Gravity.CENTER
             setOnClickListener { openSourceApp() }
@@ -360,8 +341,8 @@ class SnapshotViewerActivity : ComponentActivity() {
             )
         )
         setContentView(root)
-        // 模糊模式背景提升到 Decor 层，确保从状态栏上沿连续覆盖到屏幕底部，
-        // 不受查看区图片留白和内容 inset 影响；普通模式保持原有 root 层级。
+        // 模糊模式的玻璃背景由 attachBlurBackgroundIfNeeded() 插入 Decor 最底层，
+        // 确保从状态栏上沿连续覆盖到屏幕底部，不受内容 inset 影响。
         if (blurBackground) {
             root.background = ColorDrawable(Color.TRANSPARENT)
         }
@@ -374,16 +355,6 @@ class SnapshotViewerActivity : ComponentActivity() {
         // 布局完成后按「取消展示」按钮实际高度校准一次图标尺寸
         root.post {
             if (closeBtn.height > 0) updatePageIndicator()
-            if (blurBackground) {
-                val decorLoc = IntArray(2)
-                val areaLoc = IntArray(2)
-                window.decorView.getLocationOnScreen(decorLoc)
-                area.getLocationOnScreen(areaLoc)
-                ambientBackground.panelBottomPx =
-                    (areaLoc[1] + area.height - decorLoc[1])
-                        .coerceIn(1, root.height).toFloat()
-                ambientBackground.invalidateSelf()
-            }
         }
     }
 
@@ -402,17 +373,36 @@ class SnapshotViewerActivity : ComponentActivity() {
             val bottom = if (bars.bottom > 0) bars.bottom else systemDimen("navigation_bar_height")
             v.setPadding(0, top, 0, 0)
             bar.setPadding(bar.paddingLeft, bar.paddingTop, bar.paddingRight, bottom + dp(2))
+            setBackgroundSystemBarInsets(top, bottom)
             Log.d(TAG, "查看框 insets top=$top bottom=$bottom")
             insets
         }
         // 部分 MIUI 透明窗口首次不会派发 insets，attach 后再主动应用一次资源高度兜底
         root.post {
             if (root.paddingTop == 0 && root.paddingBottom == 0) {
+                val top = systemDimen("status_bar_height")
                 val bottom = systemDimen("navigation_bar_height")
-                root.setPadding(0, systemDimen("status_bar_height"), 0, 0)
+                root.setPadding(0, top, 0, 0)
                 bar.setPadding(bar.paddingLeft, bar.paddingTop, bar.paddingRight, bottom + dp(2))
+                setBackgroundSystemBarInsets(top, bottom)
+            } else {
+                val bottom = systemDimen("navigation_bar_height")
+                setBackgroundSystemBarInsets(root.paddingTop, bottom)
             }
         }
+    }
+
+    /** 白色模糊雾面只避开顶部状态栏，连续覆盖到底部导航栏。 */
+    private fun setBackgroundSystemBarInsets(top: Int, bottom: Int) {
+        val view = ambientBackgroundView ?: return
+        val lp = view.layoutParams as? ViewGroup.MarginLayoutParams ?: return
+        val safeTop = top.coerceAtLeast(0)
+        // 底部不能再留空，否则系统导航栏区域没有同样的后景模糊。
+        val safeBottom = 0
+        if (lp.topMargin == safeTop && lp.bottomMargin == safeBottom) return
+        lp.topMargin = safeTop
+        lp.bottomMargin = safeBottom
+        view.layoutParams = lp
     }
 
     private fun systemDimen(name: String): Int = runCatching {
@@ -755,7 +745,10 @@ class SnapshotViewerActivity : ComponentActivity() {
      * 两张图全程不透明，动画结束才清空旧图，避免切换时闪黑。
      */
     private fun showBitmap(bitmap: Bitmap, fromX: Float?) {
-        ambientBackground.animateAccentColor(sampleAmbientColor(bitmap))
+        // 只有普通黑底模式需要从截图提取氛围色；模糊模式不再给背景染色。
+        if (!blurBackground) {
+            ambientBackground.animateAccentColor(sampleAmbientColor(bitmap))
+        }
         if (!blurBackgroundAttached) attachBlurBackgroundIfNeeded()
         root.visibility = View.VISIBLE
         val incoming = if (front === viewA) viewB else viewA
@@ -824,7 +817,29 @@ class SnapshotViewerActivity : ComponentActivity() {
 
     private fun attachBlurBackgroundIfNeeded() {
         if (!blurBackground || blurBackgroundAttached) return
-        window.decorView.background = ambientBackground
+        val decor = window.decorView as? ViewGroup ?: return
+        // 不依赖 decorView.background 的绘制区域：透明窗口在部分 MIUI 版本中，
+        // window background 可能只按内容区回调。显式插入 Decor 的第 0 层，
+        // 才能确保玻璃/细砂从状态栏顶部开始，并位于图片和底栏之下。
+        val backgroundView = View(this).apply {
+            background = ambientBackground
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        ambientBackgroundView = backgroundView
+        val initialTop = systemDimen("status_bar_height")
+        // 背景模糊连续到屏幕底部；底部 inset 由 bar 的 padding 消化。
+        val initialBottom = 0
+        decor.addView(
+            backgroundView,
+            0,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            ).apply {
+                topMargin = initialTop
+                bottomMargin = initialBottom
+            }
+        )
         blurBackgroundAttached = true
     }
 
@@ -854,15 +869,13 @@ class SnapshotViewerActivity : ComponentActivity() {
         )
     }
 
-    /** 低成本氛围背景：主色渐变 + 中心柔光 + 边缘暗角。 */
+    /** 查看器背景：普通档保留氛围色，模糊档只绘制轻微压暗层。 */
     private class AmbientBackgroundDrawable : Drawable() {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         private var accent = Color.rgb(40, 42, 48)
         private var accentAnimator: ValueAnimator? = null
         var dynamic = false
         var blurGlass = false
-        var cornerRadiusPx = 0f
-        var panelBottomPx = 0f
         var progress = 0f
 
         fun setAccentColor(color: Int) {
@@ -893,56 +906,18 @@ class SnapshotViewerActivity : ComponentActivity() {
             val h = bounds.height().toFloat()
             if (w <= 0f || h <= 0f) return
             val alpha = (progress.coerceIn(0f, 1f) * 255f).toInt()
-            if (blurGlass && cornerRadiusPx > 0f) {
-                canvas.save()
-                val clip = Path().apply {
-                    addRoundRect(
-                        RectF(0f, 0f, w, h),
-                        cornerRadiusPx,
-                        cornerRadiusPx,
-                        Path.Direction.CW
-                    )
-                }
-                canvas.clipPath(clip)
+            if (blurGlass) {
+                // 模糊档只保留一层白色透明雾面；FLAG_BLUR_BEHIND 提供真正的后景模糊。
+                // 不再叠加黑色压暗、灰色渐变、主色光晕、高光或细砂，避免背景发灰。
+                paint.shader = null
+                paint.color = Color.argb((alpha * 0.10f).toInt(), 255, 255, 255)
+                canvas.drawRect(0f, 0f, w, h, paint)
+                return
             }
             if (!dynamic && !blurGlass) {
                 paint.shader = null
                 paint.color = Color.argb(alpha, 17, 17, 17)
                 canvas.drawRect(0f, 0f, w, h, paint)
-                return
-            }
-            if (!dynamic) {
-                // 毛玻璃模式：外圈保持暗黑，内层是从状态栏上沿开始的圆角亮面。
-                paint.shader = null
-                paint.color = Color.argb((alpha * 0.44f).toInt(), 7, 8, 11)
-                canvas.drawRect(0f, 0f, w, h, paint)
-                val inset = (cornerRadiusPx * 0.6f).coerceAtLeast(8f)
-                // 底边与实际图片区域(area)对齐，不再用固定 h-inset 导致内层偏矮。
-                val panelBottom = if (panelBottomPx > 0f) panelBottomPx else h
-                val panel = RectF(inset, 0f, w - inset, panelBottom)
-                paint.shader = LinearGradient(
-                    0f, 0f, 0f, panel.bottom,
-                    Color.argb((alpha * 0.20f).toInt(), Color.red(accent), Color.green(accent), Color.blue(accent)),
-                    Color.argb((alpha * 0.14f).toInt(), 24, 25, 30),
-                    Shader.TileMode.CLAMP
-                )
-                canvas.drawRoundRect(panel, cornerRadiusPx, cornerRadiusPx, paint)
-                // 内层仅保留很轻的中心提亮，避免再次形成明显横向分层。
-                val glow = Color.argb((alpha * 0.06f).toInt(), Color.red(accent), Color.green(accent), Color.blue(accent))
-                paint.shader = RadialGradient(w * 0.5f, h * 0.34f, w * 0.72f, glow, Color.TRANSPARENT, Shader.TileMode.CLAMP)
-                canvas.drawRoundRect(panel, cornerRadiusPx, cornerRadiusPx, paint)
-                paint.shader = null
-                if (blurGlass && cornerRadiusPx > 0f) {
-                    canvas.restore()
-                    paint.style = Paint.Style.STROKE
-                    paint.strokeWidth = 1.5f
-                    paint.color = Color.argb((alpha * 0.16f).toInt(), 255, 255, 255)
-                    canvas.drawRoundRect(
-                        0.75f, 0.75f, w - 0.75f, h - 0.75f,
-                        cornerRadiusPx, cornerRadiusPx, paint
-                    )
-                    paint.style = Paint.Style.FILL
-                }
                 return
             }
             val top = Color.argb(alpha, Color.red(accent), Color.green(accent), Color.blue(accent))
@@ -965,12 +940,12 @@ class SnapshotViewerActivity : ComponentActivity() {
             paint.shader = RadialGradient(w * 0.5f, h * 0.42f, w * 0.82f, Color.TRANSPARENT, Color.argb((alpha * 0.72f).toInt(), 0, 0, 0), Shader.TileMode.CLAMP)
             canvas.drawRect(0f, 0f, w, h, paint)
             paint.shader = null
-            if (blurGlass && cornerRadiusPx > 0f) canvas.restore()
         }
 
         override fun setAlpha(alpha: Int) = Unit
         override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) = Unit
         override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+
     }
 
     /** 按屏幕尺寸降采样解码，避免超大图占满内存。 */
@@ -1049,12 +1024,12 @@ class SnapshotViewerActivity : ComponentActivity() {
             cornerRadius = dp(radiusDp).toFloat()
         }
 
-    /** 样式文档的毛玻璃片：20% 白填充、40% 白描边、12dp 圆角。 */
+    /** 底部控制按钮：深色透明填充在浅色/深色模糊背景上都保持可读。 */
     private fun glass(radiusDp: Int): GradientDrawable =
         GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            setColor(0x33FFFFFF.toInt())
-            setStroke(dp(1), 0x66FFFFFF.toInt())
+            setColor(0x70000000)
+            setStroke(dp(1), 0x70FFFFFF)
             cornerRadius = dp(radiusDp).toFloat()
         }
 
