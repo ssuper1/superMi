@@ -90,11 +90,27 @@ object BubblePrefs {
     const val DEFAULT_SNAPSHOT_AUTO_CLOSE = false
     const val DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE = true
     const val DEFAULT_SNAPSHOT_CORNER_DP = 12
-    const val DEFAULT_SNAPSHOT_BG_BLUR = true
+    const val DEFAULT_SNAPSHOT_BG_BLUR = false
+    /** true=优先按截图文件名判断来源，失败回退时间判断；false=始终按时间判断。 */
+    const val DEFAULT_SNAPSHOT_SOURCE_BY_NAME = false
+    const val DEFAULT_SNAPSHOT_DELETE_HOURS = 6
     const val DEFAULT_SNAPSHOT_DIR = ""
     const val SNAPSHOT_CORNER_MIN = 0
     const val SNAPSHOT_CORNER_MAX = 40
-    const val SNAPSHOT_RECENT_MS = 12L * 60 * 60 * 1000
+    const val SNAPSHOT_DELETE_HOURS_MIN = 1
+    const val SNAPSHOT_DELETE_HOURS_MAX = 12
+
+    fun snapshotDeleteHours(ctx: Context?): Int {
+        val resolver = ctx?.contentResolver
+        val v = config(ctx)?.getInt("snapshot_delete_hours")
+            ?: resolver?.let {
+                Settings.System.getInt(it, "supermi_snapshot_delete_hours", DEFAULT_SNAPSHOT_DELETE_HOURS)
+            }
+            ?: DEFAULT_SNAPSHOT_DELETE_HOURS
+        return v.coerceIn(SNAPSHOT_DELETE_HOURS_MIN, SNAPSHOT_DELETE_HOURS_MAX)
+    }
+
+    fun snapshotRecentMs(ctx: Context?): Long = snapshotDeleteHours(ctx) * 60L * 60L * 1000L
 
     fun snapshotMaxCount(ctx: Context?): Int {
         val resolver = ctx?.contentResolver
@@ -120,6 +136,20 @@ object BubblePrefs {
         return v
     }
 
+    /** true=按截图文件名中的包名判断来源；文件名未识别到时回退 UsageStats。 */
+    fun snapshotSourceByName(ctx: Context?): Boolean {
+        val resolver = ctx?.contentResolver
+        return config(ctx)?.getBoolean("snapshot_source_by_name")
+            ?: resolver?.let {
+                Settings.System.getInt(
+                    it,
+                    "supermi_snapshot_source_by_name",
+                    if (DEFAULT_SNAPSHOT_SOURCE_BY_NAME) 1 else 0
+                ) == 1
+            }
+            ?: DEFAULT_SNAPSHOT_SOURCE_BY_NAME
+    }
+
     /** true=定时关闭（到 TTL 自动消失），false=一直开启（只能手动关闭）。 */
     fun snapshotAutoClose(ctx: Context?): Boolean {
         val resolver = ctx?.contentResolver
@@ -140,7 +170,7 @@ object BubblePrefs {
         return v
     }
 
-    /** true=查看框背景用模糊蒙版；false=保持原来的黑底正常背景。 */
+    /** true=查看框背景用白色透明模糊；false=使用普通黑底背景。 */
     fun snapshotBgBlur(ctx: Context?): Boolean {
         val resolver = ctx?.contentResolver
         val v = config(ctx)?.getBoolean("snapshot_bg_blur")
@@ -335,7 +365,7 @@ object BubblePrefs {
             b.getBoolean("bg_light", DEFAULT_BG_LIGHT).toString(),
             b.getBoolean("bg_border", DEFAULT_BG_BORDER).toString(),
             b.getInt("dismiss_secs", DEFAULT_DISMISS_SECS).toString()
-            ,b.getInt("snapshot_max_count", DEFAULT_SNAPSHOT_MAX_COUNT).toString(), b.getInt("snapshot_ttl_secs", DEFAULT_SNAPSHOT_TTL_SECS).toString(), b.getBoolean("snapshot_auto_clean", DEFAULT_SNAPSHOT_AUTO_CLEAN).toString(), b.getBoolean("snapshot_auto_close", DEFAULT_SNAPSHOT_AUTO_CLOSE).toString(), b.getBoolean("snapshot_open_source_close", DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE).toString(), b.getBoolean("snapshot_bg_blur", DEFAULT_SNAPSHOT_BG_BLUR).toString(), b.getInt("snapshot_corner_dp", DEFAULT_SNAPSHOT_CORNER_DP).toString(), b.getString("snapshot_dir") ?: ""
+            ,b.getInt("snapshot_max_count", DEFAULT_SNAPSHOT_MAX_COUNT).toString(), b.getInt("snapshot_ttl_secs", DEFAULT_SNAPSHOT_TTL_SECS).toString(), b.getBoolean("snapshot_auto_clean", DEFAULT_SNAPSHOT_AUTO_CLEAN).toString(), b.getBoolean("snapshot_source_by_name", DEFAULT_SNAPSHOT_SOURCE_BY_NAME).toString(), b.getInt("snapshot_delete_hours", DEFAULT_SNAPSHOT_DELETE_HOURS).toString(), b.getBoolean("snapshot_auto_close", DEFAULT_SNAPSHOT_AUTO_CLOSE).toString(), b.getBoolean("snapshot_open_source_close", DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE).toString(), b.getBoolean("snapshot_bg_blur", DEFAULT_SNAPSHOT_BG_BLUR).toString(), b.getInt("snapshot_corner_dp", DEFAULT_SNAPSHOT_CORNER_DP).toString(), b.getString("snapshot_dir") ?: ""
         ).joinToString("\u0000")
 
     private fun persistSettings(ctx: Context, b: Bundle) {
@@ -366,6 +396,8 @@ object BubblePrefs {
             Settings.System.putInt(cr, "supermi_snapshot_max_count", b.getInt("snapshot_max_count", DEFAULT_SNAPSHOT_MAX_COUNT))
             Settings.System.putInt(cr, "supermi_snapshot_ttl_secs", b.getInt("snapshot_ttl_secs", DEFAULT_SNAPSHOT_TTL_SECS))
             Settings.System.putInt(cr, "supermi_snapshot_auto_clean", if (b.getBoolean("snapshot_auto_clean", DEFAULT_SNAPSHOT_AUTO_CLEAN)) 1 else 0)
+            Settings.System.putInt(cr, "supermi_snapshot_source_by_name", if (b.getBoolean("snapshot_source_by_name", DEFAULT_SNAPSHOT_SOURCE_BY_NAME)) 1 else 0)
+            Settings.System.putInt(cr, "supermi_snapshot_delete_hours", b.getInt("snapshot_delete_hours", DEFAULT_SNAPSHOT_DELETE_HOURS))
             Settings.System.putInt(cr, "supermi_snapshot_auto_close", if (b.getBoolean("snapshot_auto_close", DEFAULT_SNAPSHOT_AUTO_CLOSE)) 1 else 0)
             Settings.System.putInt(cr, "supermi_snapshot_open_source_close", if (b.getBoolean("snapshot_open_source_close", DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE)) 1 else 0)
             Settings.System.putInt(cr, "supermi_snapshot_bg_blur", if (b.getBoolean("snapshot_bg_blur", DEFAULT_SNAPSHOT_BG_BLUR)) 1 else 0)
@@ -403,6 +435,8 @@ object BubblePrefs {
             putInt("snapshot_max_count", Settings.System.getInt(cr, "supermi_snapshot_max_count", DEFAULT_SNAPSHOT_MAX_COUNT))
             putInt("snapshot_ttl_secs", Settings.System.getInt(cr, "supermi_snapshot_ttl_secs", DEFAULT_SNAPSHOT_TTL_SECS))
             putBoolean("snapshot_auto_clean", Settings.System.getInt(cr, "supermi_snapshot_auto_clean", 1) == 1)
+            putBoolean("snapshot_source_by_name", Settings.System.getInt(cr, "supermi_snapshot_source_by_name", if (DEFAULT_SNAPSHOT_SOURCE_BY_NAME) 1 else 0) == 1)
+            putInt("snapshot_delete_hours", Settings.System.getInt(cr, "supermi_snapshot_delete_hours", DEFAULT_SNAPSHOT_DELETE_HOURS))
             putBoolean("snapshot_auto_close", Settings.System.getInt(cr, "supermi_snapshot_auto_close", if (DEFAULT_SNAPSHOT_AUTO_CLOSE) 1 else 0) == 1)
             putBoolean("snapshot_open_source_close", Settings.System.getInt(cr, "supermi_snapshot_open_source_close", if (DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE) 1 else 0) == 1)
             putBoolean("snapshot_bg_blur", Settings.System.getInt(cr, "supermi_snapshot_bg_blur", if (DEFAULT_SNAPSHOT_BG_BLUR) 1 else 0) == 1)

@@ -43,6 +43,8 @@ class BubblePosProvider : ContentProvider() {
         const val KEY_SNAPSHOT_MAX_COUNT = "snapshot_max_count"
         const val KEY_SNAPSHOT_TTL_SECS = "snapshot_ttl_secs"
         const val KEY_SNAPSHOT_AUTO_CLEAN = "snapshot_auto_clean"
+        const val KEY_SNAPSHOT_SOURCE_BY_NAME = "snapshot_source_by_name"
+        const val KEY_SNAPSHOT_DELETE_HOURS = "snapshot_delete_hours"
         const val KEY_SNAPSHOT_AUTO_CLOSE = "snapshot_auto_close"
         const val KEY_SNAPSHOT_OPEN_SOURCE_CLOSE = "snapshot_open_source_close"
         const val KEY_SNAPSHOT_BG_BLUR = "snapshot_bg_blur"
@@ -123,6 +125,8 @@ class BubblePosProvider : ContentProvider() {
         @Volatile var snapshotMaxCount: Int = 1
         @Volatile var snapshotTtlSecs: Int = 60
         @Volatile var snapshotAutoClean: Boolean = true
+        @Volatile var snapshotSourceByName: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_SOURCE_BY_NAME
+        @Volatile var snapshotDeleteHours: Int = BubblePrefs.DEFAULT_SNAPSHOT_DELETE_HOURS
         @Volatile var snapshotAutoClose: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_AUTO_CLOSE
         @Volatile var snapshotOpenSourceClose: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE
         @Volatile var snapshotBgBlur: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_BG_BLUR
@@ -178,6 +182,8 @@ class BubblePosProvider : ContentProvider() {
                     KEY_SNAPSHOT_MAX_COUNT -> snapshotMaxCount = v.toIntOrNull()?.coerceIn(1, 3) ?: snapshotMaxCount
                     KEY_SNAPSHOT_TTL_SECS -> snapshotTtlSecs = v.toIntOrNull()?.coerceIn(15, 600) ?: snapshotTtlSecs
                     KEY_SNAPSHOT_AUTO_CLEAN -> snapshotAutoClean = v != "0"
+                    KEY_SNAPSHOT_SOURCE_BY_NAME -> snapshotSourceByName = v != "0"
+                    KEY_SNAPSHOT_DELETE_HOURS -> snapshotDeleteHours = v.toIntOrNull()?.coerceIn(BubblePrefs.SNAPSHOT_DELETE_HOURS_MIN, BubblePrefs.SNAPSHOT_DELETE_HOURS_MAX) ?: snapshotDeleteHours
                     KEY_SNAPSHOT_AUTO_CLOSE -> snapshotAutoClose = v != "0"
                     KEY_SNAPSHOT_OPEN_SOURCE_CLOSE -> snapshotOpenSourceClose = v != "0"
                     KEY_SNAPSHOT_BG_BLUR -> snapshotBgBlur = v != "0"
@@ -234,6 +240,8 @@ class BubblePosProvider : ContentProvider() {
             putInt(KEY_SNAPSHOT_MAX_COUNT, snapshotMaxCount)
             putInt(KEY_SNAPSHOT_TTL_SECS, snapshotTtlSecs)
             putBoolean(KEY_SNAPSHOT_AUTO_CLEAN, snapshotAutoClean)
+            putBoolean(KEY_SNAPSHOT_SOURCE_BY_NAME, snapshotSourceByName)
+            putInt(KEY_SNAPSHOT_DELETE_HOURS, snapshotDeleteHours)
             putBoolean(KEY_SNAPSHOT_AUTO_CLOSE, snapshotAutoClose)
             putBoolean(KEY_SNAPSHOT_OPEN_SOURCE_CLOSE, snapshotOpenSourceClose)
             putBoolean(KEY_SNAPSHOT_BG_BLUR, snapshotBgBlur)

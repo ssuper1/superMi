@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.ContentValues
 import android.content.Intent
 import android.graphics.BitmapFactory
-import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
@@ -177,14 +176,31 @@ object SnapshotStore {
             diag(context, "跳过删原图: 不在截屏目录内 path=$filePath dir=$basePath")
             return false
         }
+        if (!target.isFile) {
+            diag(context, "跳过删原图: 设置目录内目标文件不存在 path=$filePath")
+            return false
+        }
         val takenMs = orig.takenMs ?: target.lastModified().takeIf { it > 0L } ?: 0L
         val ageMs = System.currentTimeMillis() - takenMs
-        if (takenMs <= 0L || ageMs > BubblePrefs.SNAPSHOT_RECENT_MS) {
+        if (takenMs <= 0L || ageMs > BubblePrefs.snapshotRecentMs(context)) {
             diag(context, "跳过删原图: 非最近截图 takenMs=$takenMs ageMs=$ageMs path=$filePath")
             return false
         }
         diag(context, "允许删原图: path=$filePath takenMs=$takenMs 距今=${ageMs / 1000}秒")
         return true
+    }
+
+    /**
+     * App 进程只负责把伴生记录限制到用户设置的截图目录并做时间校验；
+     * 真正的原图删除统一交给 system_server，避免 scoped storage、root 隐藏和重复删除。
+     */
+    private fun validatedOriginalForDelete(context: Context, orig: OrigInfo): OrigInfo? {
+        val target = resolveOriginalForDelete(context, orig)
+        if (!shouldDeleteOriginal(context, orig, target) || target == null) return null
+        return orig.copy(
+            path = target.absolutePath,
+            name = orig.name?.takeIf { it.isNotBlank() } ?: target.name
+        )
     }
 
     private fun deleteFileWithOriginal(context: Context, file: File, deleteOriginal: Boolean) {
@@ -195,35 +211,26 @@ object SnapshotStore {
             "删缓存 ${file.name}: 自动删原图=$deleteOriginal keepOnClose=$keep, 原图记录=" +
                 (orig?.let { "path=${it.path} uri=${it.uri} saved=${it.savedPath ?: "无"}" } ?: "无")
         )
-        var origToNotify: OrigInfo? = null
-        if (deleteOriginal && !keep) {
+        val origToNotify = if (deleteOriginal && !keep && orig != null) {
             try {
-                orig?.let { info ->
-                    val target = resolveOriginalForDelete(context, info)
-                    if (shouldDeleteOriginal(context, info, target)) {
-                        val effective = if (target != null && !File(info.path).isAbsolute) {
-                            info.copy(path = target.absolutePath)
-                        } else {
-                            info
-                        }
-                        origToNotify = effective
-                        deleteOriginalFile(context, effective.path, effective.uri)
-                    }
-                }
+                validatedOriginalForDelete(context, orig)
             } catch (t: Throwable) {
-                diag(context, "删原图异常: $t")
+                diag(context, "原图删除校验异常: $t")
+                null
             }
+        } else {
+            null
         }
-        File(file.parentFile, file.name + ORIG_SUFFIX).delete()
-        file.delete()
-        diag(context, "删缓存完成: ${file.name} 剩余存在=${file.exists()}")
-        // 通知 system_server：气泡移除该图；若开了自动删原图且能反查到原图，则由系统权限代删相册原图
+        // 先把完整删除信息交给 system_server，再清除本地伴生记录和缓存。
         val cacheUri = try {
             FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file).toString()
         } catch (_: Throwable) {
             null
         }
         notifySystemDelete(context, cacheUri, origToNotify)
+        File(file.parentFile, file.name + ORIG_SUFFIX).delete()
+        file.delete()
+        diag(context, "本地缓存删除完成: ${file.name} 剩余存在=${file.exists()}")
     }
 
     private fun notifySystemDelete(context: Context, cacheUri: String?, orig: OrigInfo?) {
@@ -241,7 +248,7 @@ object SnapshotStore {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             context.sendBroadcast(intent, "com.example.supermi.permission.SHOW_SNAPSHOT")
-            diag(context, "已通知 system_server 删除: cache=${cacheUri ?: "无"} orig=${orig?.path ?: "无"}")
+            diag(context, "已提交 system_server 删除请求: cache=${cacheUri ?: "无"} orig=${orig?.path ?: "不删除"}")
         } catch (t: Throwable) {
             diag(context, "通知 system_server 删除失败: $t")
         }
@@ -357,21 +364,6 @@ object SnapshotStore {
             lines += "saved_path=$savedPath"
             lines += "saved_uri=$savedUri"
             File(file.parentFile, file.name + ORIG_SUFFIX).writeText(lines.joinToString("\n") + "\n")
-        } catch (_: Throwable) {
-        }
-    }
-
-    /** 移除副本记录（用于“删除相册图片”后），保留原图记录。 */
-    private fun clearSavedInfo(file: File) {
-        try {
-            val old = readOrigInfo(file) ?: return
-            val lines = buildString {
-                append("path=${old.path}\n")
-                append("uri=${old.uri}\n")
-                old.takenMs?.let { append("taken_ms=$it\n") }
-                old.name?.takeIf { it.isNotBlank() }?.let { append("name=$it\n") }
-            }
-            File(file.parentFile, file.name + ORIG_SUFFIX).writeText(lines)
         } catch (_: Throwable) {
         }
     }
@@ -561,20 +553,27 @@ object SnapshotStore {
                 diag(context, "删除相册图片: 无原图记录 uri=$snapshotUri")
                 return "没有可删除的相册图片"
             }
-            var targets = 0
-            if (info.path.isNotBlank()) {
-                targets++
-                deleteOriginalFile(context, info.path, info.uri)
-                notifySystemDeleteOriginal(context, info.path, info.uri, info.takenMs, info.name)
-            }
+            val targets = mutableListOf<OrigInfo>()
+            validatedOriginalForDelete(context, info)?.let(targets::add)
             if (!info.savedPath.isNullOrBlank() && info.savedPath != info.path) {
-                targets++
-                deleteOriginalFile(context, info.savedPath, info.savedUri ?: "")
-                notifySystemDeleteOriginal(context, info.savedPath, info.savedUri ?: "", info.takenMs, info.name)
-                clearSavedInfo(file)
+                validatedOriginalForDelete(
+                    context,
+                    info.copy(
+                        path = info.savedPath,
+                        uri = info.savedUri.orEmpty(),
+                        name = File(info.savedPath).name
+                    )
+                )?.let(targets::add)
             }
-            diag(context, "删除相册图片完成: cache=${file.name} 目标数=$targets")
-            "已删除相册图片"
+            if (targets.isEmpty()) {
+                diag(context, "删除相册图片: 没有通过目录和时间校验的目标 cache=${file.name}")
+                return "没有可安全删除的相册图片"
+            }
+            targets.forEach { target ->
+                notifySystemDeleteOriginal(context, target.path, target.uri, target.takenMs, target.name)
+            }
+            diag(context, "已提交相册图片删除请求: cache=${file.name} 目标数=${targets.size}")
+            "已提交删除请求"
         } catch (t: Throwable) {
             diag(context, "删除相册图片异常: $t")
             "删除失败"
@@ -598,56 +597,9 @@ object SnapshotStore {
                 putExtra(EXTRA_ORIG_NAME, name ?: "")
             }
             context.sendBroadcast(intent, "com.example.supermi.permission.SHOW_SNAPSHOT")
-            diag(context, "已通知 system_server 仅删相册原图: path=$path uri=$mediaUri takenMs=$takenMs name=$name")
+            diag(context, "已提交 system_server 原图删除请求: path=$path uri=$mediaUri takenMs=$takenMs name=$name")
         } catch (t: Throwable) {
             diag(context, "通知 system_server 仅删原图失败: $t")
-        }
-    }
-
-    /** 删除相册原图并刷新媒体库：优先直接删，失败走 root(su rm + content delete)，最后扫描兜底。 */
-    private fun deleteOriginalFile(context: Context, path: String, mediaUri: String) {
-        var stillExists = false
-        val f = File(path)
-        if (!f.isAbsolute) {
-            // MIUI FileProvider 只给了相对文件名，直接删可能删错位置，交 system 按 MediaStore 反查
-            diag(context, "删原图: 相对路径跳过文件删除，交给 system 反查相册 path=$path")
-        } else {
-            try {
-                if (f.exists()) {
-                    val direct = f.delete()
-                    stillExists = !direct
-                    diag(context, "删原图 File.delete=$direct path=$path")
-                } else {
-                    diag(context, "删原图: 文件已不存在 path=$path")
-                }
-            } catch (t: Throwable) {
-                stillExists = true
-                diag(context, "删原图 File.delete 异常: $t")
-            }
-            if (stillExists) {
-                val rootOk = runRoot(context, "rm -f -- ${shellQuote(path)}")
-                diag(context, "删原图 root rm=$rootOk path=$path")
-            }
-        }
-        if (mediaUri.isNotBlank()) {
-            var removed = false
-            try {
-                val count = context.contentResolver.delete(Uri.parse(mediaUri), null, null)
-                removed = count > 0
-                diag(context, "删原图 media delete count=$count uri=$mediaUri")
-            } catch (t: Throwable) {
-                diag(context, "删原图 media delete 异常: $t")
-            }
-            if (!removed) {
-                val rootOk = runRoot(context, "content delete --uri ${shellQuote(mediaUri)}")
-                diag(context, "删原图 root content delete=$rootOk uri=$mediaUri")
-            }
-        }
-        try {
-            MediaScannerConnection.scanFile(context, arrayOf(path), null, null)
-            diag(context, "删原图完成: path=$path 最终存在=${File(path).exists()} uri=$mediaUri")
-        } catch (t: Throwable) {
-            diag(context, "删原图 scan 异常: $t")
         }
     }
 
@@ -658,17 +610,4 @@ object SnapshotStore {
         }
     }
 
-    private fun runRoot(context: Context, cmd: String): Boolean = try {
-        val p = ProcessBuilder("su", "-c", cmd).redirectErrorStream(true).start()
-        val ok = p.waitFor() == 0
-        val out = p.inputStream.bufferedReader().use { it.readText() }.trim()
-        diag(context, "root 命令 exit=$ok out=${out.take(300)} cmd=$cmd")
-        ok
-    } catch (t: Throwable) {
-        diag(context, "root 命令异常: $t cmd=$cmd")
-        false
-    }
-
-    private fun shellQuote(s: String): String =
-        "'" + s.replace("'", "'\\''") + "'"
 }

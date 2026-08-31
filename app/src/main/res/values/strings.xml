@@ -1,7 +1,10 @@
 <resources>
     <string name="app_name">复制Mi达</string>
-    <string name="snapshot_bubble_info">截图后分享到本app触发气泡，点击气泡查看大图。\n\n
+    <string name="snapshot_bubble_info">截图后分享到本app触发气泡，点击气泡展开。\n\n
         大图上滑关闭，多张时左右滑动可切换。“取消展示”后气泡消失；点击app图标进行跳转\n\n
         截图气泡位置与复制气泡中相应图标个数位置相同，冲突时截图气泡会自动退让，过后复原。\n\n
-        仅自动删除通过截屏分享的图片（需设置截图路径），来自其他途径分享到本app的不做删除。截图路径多在 Pictures/Screenshots 下，可截图后在相册查看图片详情获取 </string>
+        仅自动删除截屏后分享的图片，非截屏不做删除。截屏路径设置可限制删除路径\n\n
+        可截图后在相册查看图片详情获取截图路径\n\n
+        折叠的设置项并非所有机型都有效
+    </string>
 </resources>

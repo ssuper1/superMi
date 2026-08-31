@@ -42,6 +42,7 @@ object OverlayBubble {
     private const val RESOLVE_CACHE_SIZE = 16
     private const val RESOLVE_CACHE_TTL_MS = 30_000L
     private const val VIEWER_STALE_MS = 2_000L
+    private const val DELETE_MATCH_WINDOW_MS = 3_000L
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val bgHandler: Handler by lazy {
@@ -229,7 +230,7 @@ object OverlayBubble {
                     return@post
                 }
                 DebugToast.show(ctx, "截图读取成功: ${bitmap.width}x${bitmap.height}")
-                val source = SnapshotSourceResolver.resolve(ctx, takenMs)
+                val source = SnapshotSourceResolver.resolve(ctx, takenMs, origPath)
                 if (source.label != null) {
                     sysLog("截图来源: ${source.label} pkg=${source.packageName}")
                 }
@@ -374,154 +375,258 @@ object OverlayBubble {
         }
     }
 
-    /** system uid 删除：MediaStore 记录 + 物理文件，均以系统权限执行，失败不阻塞气泡移除。 */
+    /**
+     * system uid 单点执行原图删除：精确 MediaStore URI 优先，其次设置目录内的唯一媒体行，
+     * 再以已经过 App 安全校验的绝对路径兜底；厂商分享 URI 只在最后用于清理分享缓存。
+     */
     private fun deleteOriginalBySystem(path: String, uri: Uri?, takenMs: Long?, name: String?) {
         val ctx = systemContext() ?: run {
             sysLog("system 删原图: 无系统上下文 path=$path")
             return
         }
-        var mediaRemoved = false
-        if (uri != null) {
-            try {
-                val count = ctx.contentResolver.delete(uri, null, null)
-                mediaRemoved = count > 0
-                sysLog("system 删原图 media count=$count uri=$uri")
-            } catch (t: Throwable) {
-                sysLog("system 删原图 media 异常: $t uri=$uri")
-            }
-        }
-        val f = File(path)
-        val direct = if (f.isAbsolute && f.exists()) f.delete() else true
-        sysLog("system 删原图 file=$direct path=$path mediaRemoved=$mediaRemoved finalExists=${f.exists()}")
-
-        // MIUI 分享的 FileProvider 只能拿到裸文件名，反查真实相册行后按 _id 删除
-        val rows = queryMediaRows(ctx, name, takenMs)
-        val row = pickMediaRow(rows, path, name)
-        if (row == null) {
-            sysLog("system 删原图 medias 未反查到相册行 name=${name ?: "无"} takenMs=${takenMs ?: 0}")
+        val target = File(path)
+        if (!target.isAbsolute) {
+            sysLog("system 拒绝原图删除: 目标不是绝对路径 path=$path")
             return
         }
-        var rowRemoved = false
-        try {
-            val rowUri = ContentUris.withAppendedId(
-                MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
-                row.id
-            )
-            val count = ctx.contentResolver.delete(rowUri, null, null)
-            rowRemoved = count > 0
-            mediaRemoved = mediaRemoved || rowRemoved
-            sysLog("system 删原图 medias 行 id=${row.id} count=$count name=${row.displayName}")
-        } catch (t: Throwable) {
-            sysLog("system 删原图 medias 行异常: $t id=${row.id}")
-        }
-        if (row.data.isNotBlank()) {
-            try {
-                val rf = File(row.data)
-                val ok = if (rf.isAbsolute && rf.exists()) rf.delete() else true
-                sysLog("system 删原图 medias file=$ok data=${row.data} rowRemoved=$rowRemoved")
-            } catch (t: Throwable) {
-                sysLog("system 删原图 medias file 异常: $t data=${row.data}")
+        val requestedName = name?.takeIf { it.isNotBlank() } ?: target.name
+        var mediaRemoved = false
+        var selectedRow: MediaRow? = null
+
+        // content://media/... 是精确媒体行；必须先核对路径/目录、文件名和时间再删除。
+        if (uri?.authority.equals("media", ignoreCase = true)) {
+            val exactRows = queryMediaRows(ctx, uri!!, null, null)
+            val exact = exactRows.singleOrNull { rowMatchesRequest(it, target, requestedName, takenMs) }
+            if (exact != null) {
+                selectedRow = exact
+                mediaRemoved = deleteMediaUri(ctx, uri, "精确 URI")
+            } else {
+                sysLog("system 精确 MediaStore URI 未通过目标校验: uri=$uri path=$path name=$requestedName")
             }
         }
-        sysLog("system 删原图最终: path=$path mediaRemoved=$mediaRemoved")
+
+        // 厂商 FileProvider 或失效的精确 URI：仅在设置目录内按强匹配顺序寻找唯一媒体行。
+        if (!mediaRemoved) {
+            selectedRow = findMediaRow(ctx, target, requestedName, takenMs)
+            if (selectedRow != null) {
+                mediaRemoved = deleteMediaUri(ctx, mediaUri(selectedRow.id), "设置目录匹配")
+            } else {
+                sysLog("system 设置目录内未找到唯一 MediaStore 行: path=$path name=$requestedName takenMs=${takenMs ?: 0}")
+            }
+        }
+
+        // MediaStore 正常会连同物理文件一起删除；只有文件仍存在时才执行路径兜底。
+        var fileGone = !target.exists()
+        if (!fileGone) {
+            val deleted = try {
+                target.delete()
+            } catch (t: Throwable) {
+                sysLog("system 路径兜底删除异常: $t path=$path")
+                false
+            }
+            fileGone = !target.exists()
+            sysLog("system 路径兜底删除: delete=$deleted finalExists=${target.exists()} path=$path")
+        }
+
+        // 路径兜底成功但媒体行先前删除失败时，再清理一次精确残留行，不做宽泛时间匹配。
+        if (fileGone && !mediaRemoved) {
+            val staleRow = selectedRow ?: findExactMediaRow(ctx, target, requestedName)
+            if (staleRow != null) {
+                mediaRemoved = deleteMediaUri(ctx, mediaUri(staleRow.id), "物理文件删除后的媒体残留")
+            }
+        }
+
+        // 非 MediaStore URI 表示厂商分享资源，只负责清理 .delete_screen_cache 等分享缓存。
+        var shareCacheRemoved = false
+        if (uri != null && !uri.authority.equals("media", ignoreCase = true)) {
+            shareCacheRemoved = try {
+                val count = ctx.contentResolver.delete(uri, null, null)
+                sysLog("system 厂商分享缓存删除: count=$count uri=$uri")
+                count > 0
+            } catch (t: Throwable) {
+                sysLog("system 厂商分享缓存删除异常: $t uri=$uri")
+                false
+            }
+        }
+
+        val mediaStillExists = findExactMediaRow(ctx, target, requestedName) != null
+        sysLog(
+            "system 原图删除结果: success=${!target.exists() && !mediaStillExists} " +
+                "fileGone=${!target.exists()} mediaRemoved=$mediaRemoved mediaStillExists=$mediaStillExists " +
+                "shareCacheRemoved=$shareCacheRemoved path=$path"
+        )
     }
 
     private data class MediaRow(
         val id: Long,
         val data: String,
-        val displayName: String
+        val relativePath: String,
+        val displayName: String,
+        val dateTaken: Long,
+        val dateAddedMs: Long
     )
 
-    private fun queryMediaRows(ctx: Context, name: String?, takenMs: Long?): List<MediaRow> {
-        val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+    private fun mediaUri(id: Long): Uri = ContentUris.withAppendedId(
+        MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+        id
+    )
+
+    private fun deleteMediaUri(ctx: Context, uri: Uri, source: String): Boolean = try {
+        val count = ctx.contentResolver.delete(uri, null, null)
+        sysLog("system MediaStore 删除[$source]: count=$count uri=$uri")
+        count > 0
+    } catch (t: Throwable) {
+        sysLog("system MediaStore 删除异常[$source]: $t uri=$uri")
+        false
+    }
+
+    private fun queryMediaRows(
+        ctx: Context,
+        queryUri: Uri = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+        selection: String?,
+        args: Array<String>?
+    ): List<MediaRow> {
         val projection = arrayOf(
             MediaStore.Images.Media._ID,
             MediaStore.MediaColumns.DATA,
             MediaStore.MediaColumns.RELATIVE_PATH,
-            MediaStore.MediaColumns.DISPLAY_NAME
+            MediaStore.MediaColumns.DISPLAY_NAME,
+            MediaStore.Images.Media.DATE_TAKEN,
+            MediaStore.Images.Media.DATE_ADDED
         )
         val sortOrder = "${MediaStore.Images.Media.DATE_TAKEN} DESC, ${MediaStore.Images.Media._ID} DESC"
-        val rows = mutableListOf<MediaRow>()
-
-        fun query(selection: String?, args: Array<String>?): List<MediaRow> {
-            return try {
-                ctx.contentResolver.query(collection, projection, selection, args, sortOrder)?.use { c ->
-                    val found = mutableListOf<MediaRow>()
-                    while (c.moveToNext()) {
-                        val rawData = c.getString(1)
-                        val rel = c.getString(2) ?: ""
-                        val displayName = c.getString(3) ?: ""
-                        val data = if (!rawData.isNullOrBlank()) {
-                            rawData
-                        } else if (displayName.isNotBlank()) {
-                            buildString {
-                                append(Environment.getExternalStorageDirectory().absolutePath)
-                                append("/")
-                                if (rel.isNotBlank()) {
-                                    append(rel.trimStart('/'))
-                                    if (!rel.endsWith("/")) append("/")
-                                }
-                                append(displayName)
+        return try {
+            ctx.contentResolver.query(queryUri, projection, selection, args, sortOrder)?.use { c ->
+                val found = mutableListOf<MediaRow>()
+                while (c.moveToNext()) {
+                    val rawData = c.getString(1)
+                    val rel = c.getString(2) ?: ""
+                    val displayName = c.getString(3) ?: ""
+                    val data = if (!rawData.isNullOrBlank()) {
+                        rawData
+                    } else if (displayName.isNotBlank()) {
+                        buildString {
+                            append(Environment.getExternalStorageDirectory().absolutePath)
+                            append("/")
+                            if (rel.isNotBlank()) {
+                                append(rel.trimStart('/'))
+                                if (!rel.endsWith("/")) append("/")
                             }
-                        } else {
-                            ""
+                            append(displayName)
                         }
-                        found += MediaRow(c.getLong(0), data, displayName)
+                    } else {
+                        ""
                     }
-                    found
-                } ?: emptyList()
-            } catch (t: Throwable) {
-                sysLog("system 删原图 medias 查询异常: $t selection=$selection")
-                emptyList()
-            }
+                    found += MediaRow(
+                        id = c.getLong(0),
+                        data = data,
+                        relativePath = rel,
+                        displayName = displayName,
+                        dateTaken = c.getLong(4),
+                        dateAddedMs = c.getLong(5).takeIf { it > 0L }?.times(1000L) ?: 0L
+                    )
+                }
+                found
+            } ?: emptyList()
+        } catch (t: Throwable) {
+            sysLog("system MediaStore 查询异常: $t uri=$queryUri selection=$selection")
+            emptyList()
         }
-
-        name?.takeIf { it.isNotBlank() }?.let { n ->
-            rows += query(
-                "${MediaStore.MediaColumns.DISPLAY_NAME}=?",
-                arrayOf(n)
-            )
-            if (rows.isEmpty()) {
-                rows += query(
-                    "LOWER(${MediaStore.MediaColumns.DISPLAY_NAME})=?",
-                    arrayOf(n.lowercase())
-                )
-            }
-        }
-        if (takenMs != null && takenMs > 0L) {
-            val from = (takenMs - 3000L).coerceAtLeast(0L)
-            val to = takenMs + 3000L
-            rows += query(
-                "${MediaStore.Images.Media.DATE_TAKEN} BETWEEN ? AND ?",
-                arrayOf(from.toString(), to.toString())
-            )
-            rows += query(
-                "${MediaStore.Images.Media.DATE_ADDED} BETWEEN ? AND ?",
-                arrayOf((from / 1000L).toString(), (to / 1000L).toString())
-            )
-        }
-        val seen = mutableSetOf<Long>()
-        return rows.filter { seen.add(it.id) }
     }
 
-    private fun pickMediaRow(rows: List<MediaRow>, path: String, name: String?): MediaRow? {
-        if (rows.isEmpty()) return null
-        val f = File(path)
-        val pathAbs = f.absolutePath.replace('\\', '/')
-        rows.firstOrNull { row ->
-            row.data.isNotBlank() &&
-                f.isAbsolute &&
-                File(row.data).absolutePath.replace('\\', '/') == pathAbs
-        }?.let { return it }
-        name?.takeIf { it.isNotBlank() }?.let { n ->
-            rows.firstOrNull { it.displayName.equals(n, ignoreCase = true) }?.let { return it }
+    private fun findMediaRow(ctx: Context, target: File, name: String, takenMs: Long?): MediaRow? {
+        findExactMediaRow(ctx, target, name)?.let { return it }
+        val relativePath = relativePathFor(target) ?: return null
+        if (takenMs == null || takenMs <= 0L) return null
+        val from = (takenMs - DELETE_MATCH_WINDOW_MS).coerceAtLeast(0L)
+        val to = takenMs + DELETE_MATCH_WINDOW_MS
+        val candidates = mutableListOf<MediaRow>()
+        candidates += queryMediaRows(
+            ctx,
+            selection = "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.Images.Media.DATE_TAKEN} BETWEEN ? AND ?",
+            args = arrayOf(relativePath, from.toString(), to.toString())
+        )
+        candidates += queryMediaRows(
+            ctx,
+            selection = "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.Images.Media.DATE_ADDED} BETWEEN ? AND ?",
+            args = arrayOf(relativePath, (from / 1000L).toString(), (to / 1000L).toString())
+        )
+        val unique = candidates.distinctBy { it.id }.filter {
+            rowTimeMatches(it, takenMs) && normalizedShareName(it.displayName) == normalizedShareName(name)
         }
-        return rows.lastOrNull()
+        return unique.singleOrNull()
+    }
+
+    private fun findExactMediaRow(ctx: Context, target: File, name: String): MediaRow? {
+        val targetPath = normalizedPath(target.path)
+        val byData = queryMediaRows(
+            ctx,
+            selection = "${MediaStore.MediaColumns.DATA}=?",
+            args = arrayOf(target.absolutePath)
+        ).filter { normalizedPath(it.data) == targetPath }
+        if (byData.size == 1) return byData.first()
+
+        val relativePath = relativePathFor(target) ?: return null
+        val names = shareNameCandidates(name)
+        val byRelativeName = names.flatMap { candidateName ->
+            queryMediaRows(
+                ctx,
+                selection = "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.MediaColumns.DISPLAY_NAME}=?",
+                args = arrayOf(relativePath, candidateName)
+            )
+        }.distinctBy { it.id }.filter { normalizedPath(it.data) == targetPath }
+        return byRelativeName.singleOrNull()
+    }
+
+    private fun rowMatchesRequest(row: MediaRow, target: File, name: String, takenMs: Long?): Boolean {
+        if (normalizedPath(row.data) == normalizedPath(target.path)) return true
+        val expectedRelativePath = relativePathFor(target) ?: return false
+        return row.relativePath.equals(expectedRelativePath, ignoreCase = true) &&
+            normalizedShareName(row.displayName) == normalizedShareName(name) &&
+            rowTimeMatches(row, takenMs)
+    }
+
+    private fun rowTimeMatches(row: MediaRow, takenMs: Long?): Boolean {
+        if (takenMs == null || takenMs <= 0L) return true
+        return listOf(row.dateTaken, row.dateAddedMs).any {
+            it > 0L && kotlin.math.abs(it - takenMs) <= DELETE_MATCH_WINDOW_MS
+        }
+    }
+
+    private fun relativePathFor(target: File): String? {
+        val root = normalizedPath(Environment.getExternalStorageDirectory().absolutePath).trimEnd('/')
+        val parent = normalizedPath(target.parentFile?.path ?: return null).trimEnd('/')
+        if (parent != root && !parent.startsWith("$root/")) return null
+        return parent.removePrefix(root).trimStart('/').let { if (it.isEmpty()) "" else "$it/" }
+    }
+
+    private fun normalizedPath(path: String): String = try {
+        File(path).canonicalPath.replace('\\', '/')
+    } catch (_: Throwable) {
+        File(path).absolutePath.replace('\\', '/')
+    }
+
+    private fun normalizedShareName(name: String): String {
+        val dot = name.lastIndexOf('.')
+        val stem = if (dot > 0) name.substring(0, dot) else name
+        val extension = if (dot > 0) name.substring(dot) else ""
+        return stem.removeSuffix("_com.example.supermi").lowercase() + extension.lowercase()
+    }
+
+    private fun shareNameCandidates(name: String): Set<String> {
+        val dot = name.lastIndexOf('.')
+        val stem = if (dot > 0) name.substring(0, dot) else name
+        val extension = if (dot > 0) name.substring(dot) else ""
+        return linkedSetOf(name, stem.removeSuffix("_com.example.supermi") + extension)
+            .filterTo(linkedSetOf()) { it.isNotBlank() }
     }
 
     private fun sysLog(message: String) {
-        XposedBridge.log("$TAG $message")
-        DebugLogStore.append(systemContext(), message)
+        val ctx = systemContext() ?: return
+        if (BubblePrefs.debugEnabled(ctx)) {
+            XposedBridge.log("$TAG $message")
+            DebugLogStore.append(ctx, message)
+        }
     }
 
     private fun readBubbleValues(ctx: Context): BubbleValues = BubbleValues(

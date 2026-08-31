@@ -128,7 +128,7 @@
                 android:background="@drawable/bg_card"
                 android:lineSpacingExtra="5dp"
                 android:padding="16dp"
-                android:text="开启后，应用会显示识别过程的提示，并将识别结果、匹配原因、可用 App 和跳转结果写入系统日志。关闭后不会显示这些调试提示。\n\n日志标签：SuperMi\n日志来源：剪贴板识别、截图识别、气泡跳转"
+                android:text="日志标签：SuperMi\n日志来源：剪贴板识别、截图识别、气泡跳转\n为适配不同机型，图片删除有多层尝试，部分显示删除失败为正常现象"
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
             <TextView
@@ -146,7 +146,7 @@
                 android:background="@drawable/bg_card"
                 android:lineSpacingExtra="5dp"
                 android:padding="16dp"
-                android:text="遇到识别不准确或气泡无法打开时，可以临时开启调试模式复现问题，再通过系统日志查看详细过程。调试提示可能包含识别到的文本片段，请注意隐私。\n截图气泡缓存在/data/user/0/com.example.supermi/no_backup/supermi_snapshots"
+                android:text="遇到识别不准确或气泡无法打开时，可以临时开启调试模式复现问题。调试提示可能包含识别到的文本片段，请注意隐私。\n截图气泡缓存在/data/user/0/com.example.supermi/no_backup/supermi_snapshots"
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
         </LinearLayout>

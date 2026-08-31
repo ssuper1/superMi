@@ -52,6 +52,12 @@ class ShareReceiverActivity : Activity() {
                         putExtra(EXTRA_MIME, saved.mime)
                         putExtra(SnapshotStore.EXTRA_CACHE_PATH, saved.file.absolutePath)
                         putExtra(SnapshotStore.EXTRA_ORIG_PATH, saved.origPath.orEmpty())
+                        putExtra(
+                            SnapshotStore.EXTRA_ORIG_NAME,
+                            saved.origPath?.substringAfterLast('/')
+                                ?.takeIf { it.isNotBlank() }
+                                ?: uri.lastPathSegment.orEmpty()
+                        )
                         putExtra(SnapshotStore.EXTRA_TAKEN_MS, saved.takenMs ?: 0L)
                         // 同时把 URI 放入 ClipData，确保 Android 16 将 grant 传递给动态 receiver。
                         clipData = ClipData.newRawUri("snapshot", cacheUri)

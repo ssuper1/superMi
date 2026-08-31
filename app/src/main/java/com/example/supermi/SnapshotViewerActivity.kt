@@ -54,6 +54,8 @@ class SnapshotViewerActivity : ComponentActivity() {
     @Volatile
     private var sideActionBusy = false
     private var loadSeq = 0
+    /** 已从页码区启动来源应用；用于区别来源应用切换和用户按 Home 离开。 */
+    private var sourceAppLaunched = false
     private var sourceOpenPendingClose = false
     private var sourceOpenStopped = false
     private val bitmapCache =
@@ -267,10 +269,10 @@ class SnapshotViewerActivity : ComponentActivity() {
         sideBtn = TextView(this).apply {
             text = if (autoClean) "保存到相册" else "删除相册图片"
             gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
+            setTextColor(0xFFD5D8DE.toInt())
             textSize = 11f
             setPadding(dp(14), dp(7), dp(14), dp(7))
-            // 深色半透明按钮，避免操作栏重新变成灰色玻璃面板。
+            // 底栏已有深色遮罩，按钮恢复白色半透明玻璃片效果。
             background = glass(12)
             setOnClickListener { onSideAction() }
         }
@@ -292,7 +294,7 @@ class SnapshotViewerActivity : ComponentActivity() {
         closeBtn = TextView(this).apply {
             text = "取消展示"
             gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
+            setTextColor(0xFFD5D8DE.toInt())
             textSize = 14f
             setPadding(dp(26), dp(8), dp(26), dp(8))
             background = glass(12)
@@ -506,6 +508,7 @@ class SnapshotViewerActivity : ComponentActivity() {
             val launch = packageManager.getLaunchIntentForPackage(pkg)
             if (launch != null) {
                 launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                sourceAppLaunched = true
                 if (BubblePrefs.snapshotOpenSourceClose(this)) {
                     sourceOpenStopped = false
                     sourceOpenPendingClose = true
@@ -515,10 +518,20 @@ class SnapshotViewerActivity : ComponentActivity() {
                 Toast.makeText(this, "无法打开来源应用", Toast.LENGTH_SHORT).show()
             }
         } catch (_: Throwable) {
+            sourceAppLaunched = false
             sourceOpenPendingClose = false
             sourceOpenStopped = false
             Toast.makeText(this, "无法打开来源应用", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    /** 用户按 Home 离开时，查看器不一定会进入 onDestroy；先恢复气泡再结束查看器。 */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (sourceAppLaunched || isFinishing || exiting) return
+        restoreBubbleAfterClose()
+        finish()
+        overridePendingTransition(0, 0)
     }
 
     override fun onStop() {
@@ -528,6 +541,8 @@ class SnapshotViewerActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // 来源应用返回后保留查看器时，清除本次外部跳转标记。
+        sourceAppLaunched = false
         // 从来源 App 返回：按设置直接关闭查看框，露出打开查看框前的界面
         if (sourceOpenStopped) {
             sourceOpenStopped = false
@@ -1024,12 +1039,12 @@ class SnapshotViewerActivity : ComponentActivity() {
             cornerRadius = dp(radiusDp).toFloat()
         }
 
-    /** 底部控制按钮：深色透明填充在浅色/深色模糊背景上都保持可读。 */
+    /** 底部控制按钮：烟灰透明填充配低亮度玻璃描边。 */
     private fun glass(radiusDp: Int): GradientDrawable =
         GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            setColor(0x70000000)
-            setStroke(dp(1), 0x70FFFFFF)
+            setColor(0x52000000)
+            setStroke(dp(1), 0x52FFFFFF)
             cornerRadius = dp(radiusDp).toFloat()
         }
 

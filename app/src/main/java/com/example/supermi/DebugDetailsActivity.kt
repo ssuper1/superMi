@@ -1,10 +1,14 @@
 package com.example.supermi
 
+import android.content.res.Configuration
+import android.graphics.Color
 import android.os.Bundle
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.updatePadding
 import com.example.supermi.xposed.DebugLogStore
 import com.example.supermi.xposed.BubblePrefs
@@ -13,6 +17,15 @@ import androidx.appcompat.widget.SwitchCompat
 class DebugDetailsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+        val darkMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
+            Configuration.UI_MODE_NIGHT_YES
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !darkMode
+            isAppearanceLightNavigationBars = !darkMode
+        }
         setContentView(R.layout.activity_debug_details)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.debug_details_root)) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())

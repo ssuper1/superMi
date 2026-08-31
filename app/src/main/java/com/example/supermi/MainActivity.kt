@@ -79,6 +79,8 @@ class MainActivity : AppCompatActivity() {
     private var snapshotMaxCount: Int = BubblePrefs.DEFAULT_SNAPSHOT_MAX_COUNT
     private var snapshotTtlSecs: Int = BubblePrefs.DEFAULT_SNAPSHOT_TTL_SECS
     private var snapshotAutoClean: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_AUTO_CLEAN
+    private var snapshotSourceByName: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_SOURCE_BY_NAME
+    private var snapshotDeleteHours: Int = BubblePrefs.DEFAULT_SNAPSHOT_DELETE_HOURS
     private var snapshotAutoClose: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_AUTO_CLOSE
     private var snapshotOpenSourceClose: Boolean = BubblePrefs.DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE
     private var snapshotCornerDp: Int = BubblePrefs.DEFAULT_SNAPSHOT_CORNER_DP
@@ -296,6 +298,25 @@ class MainActivity : AppCompatActivity() {
                 snapshotAutoClean = checked
                 saveConfig()
             }
+        }
+        findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.sw_snap_source_by_name).apply {
+            isSaveEnabled = false
+            isChecked = snapshotSourceByName
+            setOnCheckedChangeListener { _, checked ->
+                snapshotSourceByName = checked
+                saveConfig()
+            }
+        }
+        updateSnapshotDeleteHoursSeg()
+        findViewById<Button>(R.id.btn_snap_delete_1h).setOnClickListener { setSnapshotDeleteHours(1) }
+        findViewById<Button>(R.id.btn_snap_delete_3h).setOnClickListener { setSnapshotDeleteHours(3) }
+        findViewById<Button>(R.id.btn_snap_delete_6h).setOnClickListener { setSnapshotDeleteHours(6) }
+        findViewById<Button>(R.id.btn_snap_delete_12h).setOnClickListener { setSnapshotDeleteHours(12) }
+        val snapshotMorePanel = findViewById<View>(R.id.panel_snap_more)
+        findViewById<TextView>(R.id.btn_snap_more).setOnClickListener { button ->
+            val expanded = snapshotMorePanel.visibility != View.VISIBLE
+            snapshotMorePanel.visibility = if (expanded) View.VISIBLE else View.GONE
+            (button as TextView).text = if (expanded) "收起" else "查看更多"
         }
         findViewById<View>(R.id.row_snap_corner).setOnClickListener {
             startActivity(Intent(this, SnapshotCornerActivity::class.java))
@@ -558,6 +579,31 @@ class MainActivity : AppCompatActivity() {
         updateSnapshotCloseSeg()
         applySnapshotCloseUi()
         saveConfig()
+    }
+
+    private fun setSnapshotDeleteHours(value: Int) {
+        snapshotDeleteHours = value.coerceIn(
+            BubblePrefs.SNAPSHOT_DELETE_HOURS_MIN,
+            BubblePrefs.SNAPSHOT_DELETE_HOURS_MAX
+        )
+        updateSnapshotDeleteHoursSeg()
+        saveConfig()
+    }
+
+    private fun updateSnapshotDeleteHoursSeg() {
+        val ids = mapOf(
+            1 to R.id.btn_snap_delete_1h,
+            3 to R.id.btn_snap_delete_3h,
+            6 to R.id.btn_snap_delete_6h,
+            12 to R.id.btn_snap_delete_12h
+        )
+        for ((hours, id) in ids) {
+            val btn = findViewById<Button>(id)
+            val active = hours == snapshotDeleteHours
+            btn.background = getDrawable(if (active) R.drawable.bg_seg_active else android.R.color.transparent)
+            btn.backgroundTintList = null
+            btn.setTextColor(resources.getColor(if (active) R.color.blue_text else R.color.text_tertiary, theme))
+        }
     }
 
     private fun setSnapshotOpenSourceReturnClose(value: Boolean) {
@@ -1050,6 +1096,15 @@ class MainActivity : AppCompatActivity() {
         } else {
             fromSettings("snapshot_auto_clean", if (snapshotAutoClean) 1 else 0) == 1
         }
+        snapshotSourceByName = if (m.containsKey(BubblePosProvider.KEY_SNAPSHOT_SOURCE_BY_NAME)) {
+            m[BubblePosProvider.KEY_SNAPSHOT_SOURCE_BY_NAME] != "0"
+        } else {
+            fromSettings("snapshot_source_by_name", if (snapshotSourceByName) 1 else 0) == 1
+        }
+        snapshotDeleteHours = m[BubblePosProvider.KEY_SNAPSHOT_DELETE_HOURS]?.toIntOrNull()
+            ?.coerceIn(BubblePrefs.SNAPSHOT_DELETE_HOURS_MIN, BubblePrefs.SNAPSHOT_DELETE_HOURS_MAX)
+            ?: fromSettings("snapshot_delete_hours", BubblePrefs.DEFAULT_SNAPSHOT_DELETE_HOURS)
+                .coerceIn(BubblePrefs.SNAPSHOT_DELETE_HOURS_MIN, BubblePrefs.SNAPSHOT_DELETE_HOURS_MAX)
         snapshotAutoClose = if (m.containsKey(BubblePosProvider.KEY_SNAPSHOT_AUTO_CLOSE)) {
             m[BubblePosProvider.KEY_SNAPSHOT_AUTO_CLOSE] != "0"
         } else {
@@ -1099,6 +1154,8 @@ class MainActivity : AppCompatActivity() {
         BubblePosProvider.snapshotMaxCount = snapshotMaxCount
         BubblePosProvider.snapshotTtlSecs = snapshotTtlSecs
         BubblePosProvider.snapshotAutoClean = snapshotAutoClean
+        BubblePosProvider.snapshotSourceByName = snapshotSourceByName
+        BubblePosProvider.snapshotDeleteHours = snapshotDeleteHours
         BubblePosProvider.snapshotAutoClose = snapshotAutoClose
         BubblePosProvider.snapshotOpenSourceClose = snapshotOpenSourceClose
         BubblePosProvider.snapshotBgBlur = snapshotBgBlur
@@ -1135,6 +1192,8 @@ class MainActivity : AppCompatActivity() {
         m[BubblePosProvider.KEY_SNAPSHOT_MAX_COUNT] = "$snapshotMaxCount"
         m[BubblePosProvider.KEY_SNAPSHOT_TTL_SECS] = "$snapshotTtlSecs"
         m[BubblePosProvider.KEY_SNAPSHOT_AUTO_CLEAN] = if (snapshotAutoClean) "1" else "0"
+        m[BubblePosProvider.KEY_SNAPSHOT_SOURCE_BY_NAME] = if (snapshotSourceByName) "1" else "0"
+        m[BubblePosProvider.KEY_SNAPSHOT_DELETE_HOURS] = "$snapshotDeleteHours"
         m[BubblePosProvider.KEY_SNAPSHOT_AUTO_CLOSE] = if (snapshotAutoClose) "1" else "0"
         m[BubblePosProvider.KEY_SNAPSHOT_OPEN_SOURCE_CLOSE] = if (snapshotOpenSourceClose) "1" else "0"
         m[BubblePosProvider.KEY_SNAPSHOT_BG_BLUR] = if (snapshotBgBlur) "1" else "0"
@@ -1156,7 +1215,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun writeExport(uri: Uri): Boolean {
         return try {
-            val content = AppConfig.read(this).entries.joinToString("\n") { "${it.key}=${it.value}" } + "\n"
+            // 以当前 Activity 状态补齐截图气泡字段，兼容旧版本遗留的
+            // supermi_config（旧文件可能没有新增的 snapshot_* 键）。
+            val exportMap = AppConfig.read(this).apply {
+                this[BubblePosProvider.KEY_SNAPSHOT_MAX_COUNT] = snapshotMaxCount.toString()
+                this[BubblePosProvider.KEY_SNAPSHOT_TTL_SECS] = snapshotTtlSecs.toString()
+                this[BubblePosProvider.KEY_SNAPSHOT_AUTO_CLEAN] = if (snapshotAutoClean) "1" else "0"
+                this[BubblePosProvider.KEY_SNAPSHOT_SOURCE_BY_NAME] = if (snapshotSourceByName) "1" else "0"
+                this[BubblePosProvider.KEY_SNAPSHOT_DELETE_HOURS] = snapshotDeleteHours.toString()
+                this[BubblePosProvider.KEY_SNAPSHOT_AUTO_CLOSE] = if (snapshotAutoClose) "1" else "0"
+                this[BubblePosProvider.KEY_SNAPSHOT_OPEN_SOURCE_CLOSE] = if (snapshotOpenSourceClose) "1" else "0"
+                this[BubblePosProvider.KEY_SNAPSHOT_BG_BLUR] = if (snapshotBgBlur) "1" else "0"
+                this[BubblePosProvider.KEY_SNAPSHOT_CORNER_DP] = snapshotCornerDp.toString()
+                this[BubblePosProvider.KEY_SNAPSHOT_DIR] = snapshotDir
+            }
+            val content = exportMap.entries.joinToString("\n") { "${it.key}=${it.value}" } + "\n"
             contentResolver.openOutputStream(uri)?.use { os ->
                 os.write(content.toByteArray(Charsets.UTF_8))
             } != null

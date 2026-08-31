@@ -80,12 +80,18 @@ class HookEntry : IXposedHookLoadPackage {
                         }
                         val cachePath = intent.getStringExtra(com.example.supermi.SnapshotStore.EXTRA_CACHE_PATH)
                         val origPath = intent.getStringExtra(com.example.supermi.SnapshotStore.EXTRA_ORIG_PATH)
+                        val origName = intent.getStringExtra(com.example.supermi.SnapshotStore.EXTRA_ORIG_NAME)
                         val takenMs = intent.getLongExtra(com.example.supermi.SnapshotStore.EXTRA_TAKEN_MS, 0L)
                             .takeIf { it > 0L }
                         XposedBridge.log("SuperMi: snapshot event received uri=$uri cachePath=$cachePath")
                         // 保持广播的临时 URI 授权，直到 OverlayBubble 完成读取；Android 16
                         // 会在 onReceive 返回后立即撤销异步线程尚未使用的 grant。
-                        OverlayBubble.showSnapshot(Uri.parse(uri), origPath, takenMs, cachePath) {
+                        OverlayBubble.showSnapshot(
+                            Uri.parse(uri),
+                            origPath?.takeIf { it.isNotBlank() } ?: origName,
+                            takenMs,
+                            cachePath
+                        ) {
                             try { pending.finish() } catch (_: Throwable) { }
                         }
                     } catch (t: Throwable) {
