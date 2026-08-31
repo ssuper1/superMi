@@ -737,6 +737,8 @@ object OverlayBubble {
                     snapshotBitmaps.remove(it)
                 }
                 snapshotStyle = values
+                bubbleView?.let { applyBubbleBackground(it, values, values.iconSizeDp) }
+                snapshotView?.let { applyBubbleBackground(it, values, values.iconSizeDp) }
                 if (snapshotViewerOpen) return@post
                 if (snapshotUris.isEmpty()) {
                     XposedBridge.log("$TAG snapshot refresh: no recoverable snapshots")
@@ -753,6 +755,24 @@ object OverlayBubble {
                 }
             }
         }
+    }
+
+    /** 原地更新两个气泡的底色/边框，不重置窗口和倒计时。 */
+    private fun applyBubbleBackground(view: View, values: BubbleValues, iconSizeDp: Int) {
+        val background = view.background as? GradientDrawable ?: return
+        val alpha = values.bgAlpha * 255 / 100
+        val rgb = if (values.bgLight) 0xFF else 0x3C
+        background.setColor(Color.argb(alpha, rgb, rgb, rgb))
+        if (values.bgBorder) {
+            background.setStroke(
+                dp(1),
+                if (values.bgLight) Color.argb(0x66, 0xFF, 0xFF, 0xFF) else Color.BLACK
+            )
+        } else {
+            background.setStroke(0, Color.TRANSPARENT)
+        }
+        background.cornerRadius = dp((iconSizeDp * 2 / 3).coerceAtLeast(10)).toFloat()
+        view.invalidate()
     }
 
     /** 来源 App 在前台时显示可点击气泡，但保留查看器占用状态。 */
@@ -820,7 +840,8 @@ object OverlayBubble {
                     snapshotBitmaps[itemUri]?.let { setImageDrawable(BitmapDrawable(ctx.resources, it)) }
                 }
                 setOnClickListener {
-                    if (BubblePrefs.snapshotClickOpenSourceFresh(ctx) &&
+                    // 使用气泡刷新时已读取的配置，避免点击路径同步跨进程查询导致无响应。
+                    if ((snapshotStyle?.clickOpenSource == true) &&
                         openSnapshotSourceApp(ctx, itemUri)
                     ) {
                         return@setOnClickListener

@@ -38,6 +38,7 @@ class BubblePosProvider : ContentProvider() {
         const val KEY_ICON_SIZE = "icon_size"
         const val KEY_BG_ALPHA = "bg_alpha"
         const val KEY_BG_LIGHT = "bg_light"
+        const val KEY_BG_MODE = "bg_mode"
         const val KEY_BG_BORDER = "bg_border"
         const val KEY_DISMISS_SECS = "dismiss_secs"
         const val KEY_SNAPSHOT_MAX_COUNT = "snapshot_max_count"
@@ -112,6 +113,8 @@ class BubblePosProvider : ContentProvider() {
 
         @Volatile
         var bgLight: Boolean = BubblePrefs.DEFAULT_BG_LIGHT
+        @Volatile
+        var bgMode: Int = BubblePrefs.DEFAULT_BG_MODE
 
         @Volatile
         var bgBorder: Boolean = BubblePrefs.DEFAULT_BG_BORDER
@@ -144,6 +147,7 @@ class BubblePosProvider : ContentProvider() {
     private fun loadFromFile(ctx: Context?) {
         try {
             val lines = File(ctx!!.filesDir, CONFIG_FILE).readLines()
+            var bgModeSeen = false
             for (line in lines) {
                 val i = line.indexOf('=')
                 if (i < 0) continue
@@ -176,7 +180,14 @@ class BubblePosProvider : ContentProvider() {
                     }
                     KEY_GAP23 -> gap23_3 = v.toIntOrNull() ?: gap23_3
                     KEY_BG_ALPHA -> bgAlpha = v.toIntOrNull()?.coerceIn(0, 100) ?: bgAlpha
-                    KEY_BG_LIGHT -> bgLight = v != "0"
+                    KEY_BG_LIGHT -> {
+                        bgLight = v != "0"
+                        if (!bgModeSeen) bgMode = if (bgLight) BubblePrefs.BG_MODE_LIGHT else BubblePrefs.BG_MODE_DARK
+                    }
+                    KEY_BG_MODE -> {
+                        bgMode = v.toIntOrNull()?.coerceIn(BubblePrefs.BG_MODE_DARK, BubblePrefs.BG_MODE_SYSTEM) ?: bgMode
+                        bgModeSeen = true
+                    }
                     KEY_BG_BORDER -> bgBorder = v != "0"
                     KEY_DISMISS_SECS -> dismissSecs = v.toIntOrNull()?.coerceIn(1, 10) ?: dismissSecs
                     KEY_DEBUG -> debug = v == "1"
@@ -233,6 +244,7 @@ class BubblePosProvider : ContentProvider() {
             putInt(KEY_ICON_SIZE, iconSize)
             putInt(KEY_BG_ALPHA, bgAlpha)
             putBoolean(KEY_BG_LIGHT, bgLight)
+            putInt(KEY_BG_MODE, bgMode)
             putBoolean(KEY_BG_BORDER, bgBorder)
             putInt(KEY_DISMISS_SECS, dismissSecs)
             putInt(KEY_GAP12_2, gap12_2)

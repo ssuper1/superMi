@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.DocumentsContract
 import android.provider.Settings
+import android.content.res.Configuration
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
@@ -74,6 +75,7 @@ class MainActivity : AppCompatActivity() {
     private var iconSize: Int = BubblePrefs.DEFAULT_ICON_SIZE
     private var bgAlpha: Int = BubblePrefs.DEFAULT_BG_ALPHA
     private var bgLight: Boolean = BubblePrefs.DEFAULT_BG_LIGHT
+    private var bgMode: Int = BubblePrefs.DEFAULT_BG_MODE
     private var bgBorder: Boolean = BubblePrefs.DEFAULT_BG_BORDER
     private var dismissSecs: Int = BubblePrefs.DEFAULT_DISMISS_SECS
     private var snapshotMaxCount: Int = BubblePrefs.DEFAULT_SNAPSHOT_MAX_COUNT
@@ -268,8 +270,9 @@ class MainActivity : AppCompatActivity() {
             setIconSize(BubblePrefs.DEFAULT_ICON_SIZE)
         }
         updateBgColorSeg()
-        findViewById<Button>(R.id.btn_bg_dark).setOnClickListener { setBgLight(false) }
-        findViewById<Button>(R.id.btn_bg_light).setOnClickListener { setBgLight(true) }
+        findViewById<Button>(R.id.btn_bg_dark).setOnClickListener { setBgMode(BubblePrefs.BG_MODE_DARK) }
+        findViewById<Button>(R.id.btn_bg_light).setOnClickListener { setBgMode(BubblePrefs.BG_MODE_LIGHT) }
+        findViewById<Button>(R.id.btn_bg_auto).setOnClickListener { setBgMode(BubblePrefs.BG_MODE_SYSTEM) }
         updateBgBorderSeg()
         findViewById<Button>(R.id.btn_bg_border_off).setOnClickListener { setBgBorder(false) }
         findViewById<Button>(R.id.btn_bg_border_on).setOnClickListener { setBgBorder(true) }
@@ -485,21 +488,34 @@ class MainActivity : AppCompatActivity() {
         previewView?.invalidate()
     }
 
-    private fun setBgLight(value: Boolean) {
-        bgLight = value
+    private fun setBgMode(value: Int) {
+        bgMode = value.coerceIn(BubblePrefs.BG_MODE_DARK, BubblePrefs.BG_MODE_SYSTEM)
+        bgLight = effectiveBgLight(bgMode)
         updateBgColorSeg()
         saveConfig()
         refreshPreview()
+        notifySnapshotBubbleRefresh()
+    }
+
+    /** 跟随系统时按需求反转：浅色系统使用黑底，深色系统使用浅底。 */
+    private fun effectiveBgLight(mode: Int): Boolean {
+        return when (mode) {
+            BubblePrefs.BG_MODE_DARK -> false
+            BubblePrefs.BG_MODE_LIGHT -> true
+            else -> (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
+        }
     }
 
     private fun updateBgColorSeg() {
         val ids = mapOf(
-            false to R.id.btn_bg_dark,
-            true to R.id.btn_bg_light
+            BubblePrefs.BG_MODE_DARK to R.id.btn_bg_dark,
+            BubblePrefs.BG_MODE_LIGHT to R.id.btn_bg_light,
+            BubblePrefs.BG_MODE_SYSTEM to R.id.btn_bg_auto
         )
-        for ((v, id) in ids) {
+        for ((mode, id) in ids) {
             val btn = findViewById<Button>(id)
-            val active = v == bgLight
+            val active = mode == bgMode
             btn.background = getDrawable(if (active) R.drawable.bg_seg_active else android.R.color.transparent)
             btn.backgroundTintList = null
             btn.setTextColor(resources.getColor(if (active) R.color.blue_text else R.color.text_tertiary, theme))
@@ -1123,6 +1139,15 @@ class MainActivity : AppCompatActivity() {
         } else {
             fromSettings("bg_light", if (bgLight) 1 else 0) == 1
         }
+        bgMode = m[BubblePosProvider.KEY_BG_MODE]?.toIntOrNull()?.coerceIn(
+            BubblePrefs.BG_MODE_DARK, BubblePrefs.BG_MODE_SYSTEM
+        ) ?: if (m.containsKey(BubblePosProvider.KEY_BG_LIGHT)) {
+            // 旧配置只有 bg_light 时，优先使用文件值，不被设备上残留的 bg_mode 覆盖。
+            if (bgLight) BubblePrefs.BG_MODE_LIGHT else BubblePrefs.BG_MODE_DARK
+        } else {
+            fromSettings("bg_mode", if (bgLight) BubblePrefs.BG_MODE_LIGHT else BubblePrefs.BG_MODE_DARK)
+        }
+        bgLight = effectiveBgLight(bgMode)
         bgBorder = if (m.containsKey(BubblePosProvider.KEY_BG_BORDER)) {
             m[BubblePosProvider.KEY_BG_BORDER] != "0"
         } else {
@@ -1197,6 +1222,7 @@ class MainActivity : AppCompatActivity() {
         BubblePosProvider.iconSize = iconSize
         BubblePosProvider.bgAlpha = bgAlpha
         BubblePosProvider.bgLight = bgLight
+        BubblePosProvider.bgMode = bgMode
         BubblePosProvider.bgBorder = bgBorder
         BubblePosProvider.dismissSecs = dismissSecs
         BubblePosProvider.snapshotMaxCount = snapshotMaxCount
@@ -1236,6 +1262,7 @@ class MainActivity : AppCompatActivity() {
         m[BubblePosProvider.KEY_ICON_SIZE] = "$iconSize"
         m[BubblePosProvider.KEY_BG_ALPHA] = "$bgAlpha"
         m[BubblePosProvider.KEY_BG_LIGHT] = if (bgLight) "1" else "0"
+        m[BubblePosProvider.KEY_BG_MODE] = "$bgMode"
         m[BubblePosProvider.KEY_BG_BORDER] = if (bgBorder) "1" else "0"
         m[BubblePosProvider.KEY_DISMISS_SECS] = "$dismissSecs"
         m[BubblePosProvider.KEY_SNAPSHOT_MAX_COUNT] = "$snapshotMaxCount"

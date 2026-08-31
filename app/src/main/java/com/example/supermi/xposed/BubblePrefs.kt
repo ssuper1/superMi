@@ -82,6 +82,10 @@ object BubblePrefs {
     const val ICON_SIZE_MAX = 48
     const val DEFAULT_BG_ALPHA = 20
     const val DEFAULT_BG_LIGHT = false
+    const val DEFAULT_BG_MODE = 0
+    const val BG_MODE_DARK = 0
+    const val BG_MODE_LIGHT = 1
+    const val BG_MODE_SYSTEM = 2
     const val DEFAULT_BG_BORDER = false
     const val DEFAULT_DISMISS_SECS = 5
     const val DEFAULT_SNAPSHOT_MAX_COUNT = 1
@@ -288,11 +292,35 @@ object BubblePrefs {
     }
 
     fun bgLight(ctx: Context?): Boolean {
+        return when (bgMode(ctx)) {
+            BG_MODE_LIGHT -> true
+            BG_MODE_SYSTEM -> {
+                val uiMode = (ctx?.resources ?: android.content.res.Resources.getSystem()).configuration.uiMode
+                (uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                    android.content.res.Configuration.UI_MODE_NIGHT_YES
+            }
+            else -> false
+        }
+    }
+
+    /** 背景模式：0=黑，1=白，2=跟随系统；兼容旧版仅有 bg_light 的配置。 */
+    fun bgMode(ctx: Context?): Int {
         val resolver = ctx?.contentResolver
-        val v = config(ctx)?.getBoolean("bg_light")
+        val mode = config(ctx)?.getInt("bg_mode")
+            ?: resolver?.let {
+                val sentinel = Int.MIN_VALUE
+                val value = Settings.System.getInt(it, "supermi_bg_mode", sentinel)
+                if (value != sentinel) value else null
+            }
+        if (mode != null) return mode.coerceIn(BG_MODE_DARK, BG_MODE_SYSTEM)
+        return if (bgLightLegacy(ctx)) BG_MODE_LIGHT else BG_MODE_DARK
+    }
+
+    private fun bgLightLegacy(ctx: Context?): Boolean {
+        val resolver = ctx?.contentResolver
+        return config(ctx)?.getBoolean("bg_light")
             ?: resolver?.let { Settings.System.getInt(it, "supermi_bg_light", if (DEFAULT_BG_LIGHT) 1 else 0) == 1 }
             ?: DEFAULT_BG_LIGHT
-        return v
     }
 
     fun bgBorder(ctx: Context?): Boolean {
@@ -406,6 +434,7 @@ object BubblePrefs {
             b.getInt("gap23_3", 6).toString(),
             b.getInt("bg_alpha", DEFAULT_BG_ALPHA).toString(),
             b.getBoolean("bg_light", DEFAULT_BG_LIGHT).toString(),
+            b.getInt("bg_mode", if (b.getBoolean("bg_light", DEFAULT_BG_LIGHT)) BG_MODE_LIGHT else BG_MODE_DARK).toString(),
             b.getBoolean("bg_border", DEFAULT_BG_BORDER).toString(),
             b.getInt("dismiss_secs", DEFAULT_DISMISS_SECS).toString()
             ,b.getInt("snapshot_max_count", DEFAULT_SNAPSHOT_MAX_COUNT).toString(), b.getInt("snapshot_ttl_secs", DEFAULT_SNAPSHOT_TTL_SECS).toString(), b.getBoolean("snapshot_auto_clean", DEFAULT_SNAPSHOT_AUTO_CLEAN).toString(), b.getBoolean("snapshot_source_by_name", DEFAULT_SNAPSHOT_SOURCE_BY_NAME).toString(), b.getInt("snapshot_delete_hours", DEFAULT_SNAPSHOT_DELETE_HOURS).toString(), b.getBoolean("snapshot_auto_close", DEFAULT_SNAPSHOT_AUTO_CLOSE).toString(), b.getBoolean("snapshot_open_source_close", DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE).toString(), b.getBoolean("snapshot_click_open_source", DEFAULT_SNAPSHOT_CLICK_OPEN_SOURCE).toString(), b.getBoolean("snapshot_bg_blur", DEFAULT_SNAPSHOT_BG_BLUR).toString(), b.getInt("snapshot_corner_dp", DEFAULT_SNAPSHOT_CORNER_DP).toString(), b.getString("snapshot_dir") ?: ""
@@ -428,6 +457,7 @@ object BubblePrefs {
             Settings.System.putInt(cr, "supermi_icon_size", b.getInt("icon_size", DEFAULT_ICON_SIZE))
             Settings.System.putInt(cr, "supermi_bg_alpha", b.getInt("bg_alpha", DEFAULT_BG_ALPHA))
             Settings.System.putInt(cr, "supermi_bg_light", if (b.getBoolean("bg_light", DEFAULT_BG_LIGHT)) 1 else 0)
+            Settings.System.putInt(cr, "supermi_bg_mode", b.getInt("bg_mode", if (b.getBoolean("bg_light", DEFAULT_BG_LIGHT)) BG_MODE_LIGHT else BG_MODE_DARK))
             Settings.System.putInt(cr, "supermi_bg_border", if (b.getBoolean("bg_border", DEFAULT_BG_BORDER)) 1 else 0)
             Settings.System.putInt(cr, "supermi_dismiss_secs", b.getInt("dismiss_secs", DEFAULT_DISMISS_SECS))
             Settings.System.putInt(cr, KEY_MAX_LEN, b.getInt("max_len", DEFAULT_MAX_LEN))
@@ -468,6 +498,11 @@ object BubblePrefs {
             putInt("icon_size", Settings.System.getInt(cr, "supermi_icon_size", DEFAULT_ICON_SIZE))
             putInt("bg_alpha", Settings.System.getInt(cr, "supermi_bg_alpha", DEFAULT_BG_ALPHA))
             putBoolean("bg_light", Settings.System.getInt(cr, "supermi_bg_light", if (DEFAULT_BG_LIGHT) 1 else 0) == 1)
+            putInt("bg_mode", Settings.System.getInt(cr, "supermi_bg_mode", Int.MIN_VALUE).let {
+                if (it == Int.MIN_VALUE) {
+                    if (Settings.System.getInt(cr, "supermi_bg_light", if (DEFAULT_BG_LIGHT) 1 else 0) == 1) BG_MODE_LIGHT else BG_MODE_DARK
+                } else it.coerceIn(BG_MODE_DARK, BG_MODE_SYSTEM)
+            })
             putBoolean("bg_border", Settings.System.getInt(cr, "supermi_bg_border", if (DEFAULT_BG_BORDER) 1 else 0) == 1)
             putInt("dismiss_secs", Settings.System.getInt(cr, "supermi_dismiss_secs", DEFAULT_DISMISS_SECS))
             putInt("max_len", Settings.System.getInt(cr, KEY_MAX_LEN, DEFAULT_MAX_LEN))
