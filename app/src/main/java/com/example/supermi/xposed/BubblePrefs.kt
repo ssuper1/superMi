@@ -21,6 +21,7 @@ object BubblePrefs {
     const val DEFAULT_TOP_OFFSET = 30
     const val DEFAULT_X_OFFSET = 0
     const val DEFAULT_MAX_LEN = 400
+    const val DEFAULT_DEBUG_ENABLED = false
     private val MAX_LEN_VALUES = (1..8).map { it * 100 }.toSet()
 
     private const val PROVIDER_URI = "content://com.example.supermi.bubblepos"

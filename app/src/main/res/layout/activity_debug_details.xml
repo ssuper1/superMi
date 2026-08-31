@@ -146,7 +146,7 @@
                 android:background="@drawable/bg_card"
                 android:lineSpacingExtra="5dp"
                 android:padding="16dp"
-                android:text="遇到识别不准确或气泡无法打开时，可以临时开启调试模式复现问题，再通过系统日志查看详细过程。调试提示可能包含识别到的文本片段，请注意隐私。"
+                android:text="遇到识别不准确或气泡无法打开时，可以临时开启调试模式复现问题，再通过系统日志查看详细过程。调试提示可能包含识别到的文本片段，请注意隐私。\n截图气泡缓存在/data/user/0/com.example.supermi/no_backup/supermi_snapshots"
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
         </LinearLayout>

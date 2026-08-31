@@ -150,6 +150,21 @@
                         android:textStyle="bold" />
 
                     <TextView
+                        android:id="@+id/btn_bubble_info"
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/bg_info_btn"
+                        android:clickable="true"
+                        android:contentDescription="查看气泡调整说明"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:text="!"
+                        android:textColor="@color/white"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
+
+                    <TextView
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
@@ -159,18 +174,56 @@
                         android:textSize="11sp" />
                 </LinearLayout>
 
-                <TextView
+                <LinearLayout
+                    android:id="@+id/panel_bubble_info"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="16dp"
                     android:layout_marginEnd="16dp"
                     android:layout_marginTop="12dp"
                     android:background="@drawable/bg_hint"
-                    android:lineSpacingExtra="3dp"
+                    android:orientation="vertical"
                     android:padding="10dp"
-                    android:text="点击「显示预览」，气泡会真实叠加在屏幕上方展示应用后的位置，不同图标个数布局单独调整。"
-                    android:textColor="@color/text_primary"
-                    android:textSize="12sp" />
+                    android:visibility="gone">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="使用说明"
+                            android:textColor="@color/text_primary"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/btn_bubble_info_close"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:clickable="true"
+                            android:contentDescription="关闭气泡调整说明"
+                            android:focusable="true"
+                            android:padding="4dp"
+                            android:text="✕"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="14sp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tv_bubble_info"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:lineSpacingExtra="3dp"
+                        android:text="点击「显示预览」，气泡会真实叠加在屏幕上方展示应用后的位置，不同图标个数布局单独调整。"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp" />
+                </LinearLayout>
 
                 <!-- 单次移动距离 -->
                 <LinearLayout
@@ -1106,13 +1159,35 @@
                         android:layout_weight="1"
                         android:orientation="vertical">
 
-                        <TextView
+                        <LinearLayout
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="截图气泡"
-                            android:textColor="@color/text_primary"
-                            android:textSize="14sp"
-                            android:textStyle="bold" />
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="截图气泡"
+                                android:textColor="@color/text_primary"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/btn_snapshot_info"
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:layout_marginStart="4dp"
+                                android:background="@drawable/bg_info_btn"
+                                android:clickable="true"
+                                android:contentDescription="查看截图气泡说明"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:text="!"
+                                android:textColor="@color/white"
+                                android:textSize="10sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
 
                         <TextView
                             android:layout_width="wrap_content"
@@ -1130,18 +1205,55 @@
                     android:layout_marginStart="65dp"
                     android:background="@color/divider" />
 
-                <TextView
+                <LinearLayout
+                    android:id="@+id/panel_snapshot_info"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="16dp"
                     android:layout_marginEnd="16dp"
                     android:layout_marginTop="12dp"
                     android:background="@drawable/bg_hint"
-                    android:lineSpacingExtra="3dp"
+                    android:orientation="vertical"
                     android:padding="10dp"
-                    android:text="点击气泡查看大图。截图气泡位置与复制气泡中设置的相应图标个数位置相同；会自动退让复制气泡，过后复原。"
-                    android:textColor="@color/text_primary"
-                    android:textSize="12sp" />
+                    android:visibility="gone">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="使用说明"
+                            android:textColor="@color/text_primary"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/btn_snapshot_info_close"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:clickable="true"
+                            android:contentDescription="关闭截图气泡说明"
+                            android:focusable="true"
+                            android:padding="4dp"
+                            android:text="✕"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="14sp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:lineSpacingExtra="3dp"
+                        android:text="@string/snapshot_bubble_info"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp" />
+                </LinearLayout>
 
                 <!-- 最多显示张数 -->
                 <LinearLayout
@@ -1479,7 +1591,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="自动删除相册原图"
+                            android:text="自动删除原图"
                             android:textColor="@color/text_secondary"
                             android:textSize="12sp"
                             android:textStyle="bold" />
@@ -1666,6 +1778,7 @@
                     android:id="@+id/sw_debug"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:checked="false"
                     app:thumbTint="@color/switch_thumb_tint"
                     app:trackTint="@color/switch_track_tint" />
             </LinearLayout>

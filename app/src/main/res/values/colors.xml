@@ -13,6 +13,7 @@
     <color name="blue_light">#FFE0EDFC</color>
     <color name="blue_mid">#FFC9E2FA</color>
     <color name="blue_text">#FF0F5BB5</color>
+    <color name="info_btn_bg">#FF4A90E2</color>
 
     <!-- Surfaces -->
     <color name="page_bg">#FFF4F5FA</color>

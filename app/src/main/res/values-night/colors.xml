@@ -9,6 +9,7 @@
     <color name="blue_light">#FF2B5C8A</color>
     <color name="blue_mid">#FF336691</color>
     <color name="blue_text">#FF82B4F0</color>
+    <color name="info_btn_bg">#FF6FA7E5</color>
 
     <color name="page_bg">#FF0F1016</color>
     <color name="card_bg">#FF1C1E2A</color>

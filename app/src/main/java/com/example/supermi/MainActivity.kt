@@ -12,6 +12,9 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.DocumentsContract
 import android.provider.Settings
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -62,7 +65,7 @@ class MainActivity : AppCompatActivity() {
     private var addrAppPkg: String = ""
     private var urlAppPkg: String = ""
     private var phoneAppPkg: String = ""
-    private var debugEnabled: Boolean = false
+    private var debugEnabled: Boolean = BubblePrefs.DEFAULT_DEBUG_ENABLED
     private var maxLen: Int = BubblePrefs.DEFAULT_MAX_LEN
     private var previewCount: Int = 1
     private var gap12_2: Int = 6
@@ -145,6 +148,53 @@ class MainActivity : AppCompatActivity() {
         }
 
         loadConfig()
+
+        val bubbleInfoText = "点击「显示预览」，气泡会真实叠加在屏幕上方展示应用后的位置，不同图标个数布局需单独调整。"
+        val bubbleInfoSpannable = SpannableString(bubbleInfoText)
+        val bubbleInfoHighlight = "不同图标个数布局需单独调整"
+        val bubbleInfoStart = bubbleInfoText.indexOf(bubbleInfoHighlight)
+        if (bubbleInfoStart >= 0) {
+            bubbleInfoSpannable.setSpan(
+                ForegroundColorSpan(Color.RED),
+                bubbleInfoStart,
+                bubbleInfoStart + bubbleInfoHighlight.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
+        findViewById<TextView>(R.id.tv_bubble_info).text = bubbleInfoSpannable
+
+        val bubbleInfoPanel = findViewById<View>(R.id.panel_bubble_info)
+        findViewById<View>(R.id.btn_bubble_info).setOnClickListener {
+            bubbleInfoPanel.visibility = if (bubbleInfoPanel.visibility == View.VISIBLE) {
+                View.GONE
+            } else {
+                View.VISIBLE
+            }
+        }
+        findViewById<View>(R.id.btn_bubble_info_close).setOnClickListener {
+            bubbleInfoPanel.visibility = View.GONE
+        }
+        val uiState = getSharedPreferences("ui_state", Context.MODE_PRIVATE)
+        if (!uiState.getBoolean("bubble_adjust_tooltip_shown", false)) {
+            bubbleInfoPanel.visibility = View.VISIBLE
+            uiState.edit().putBoolean("bubble_adjust_tooltip_shown", true).apply()
+        }
+
+        val snapshotInfoPanel = findViewById<View>(R.id.panel_snapshot_info)
+        findViewById<View>(R.id.btn_snapshot_info).setOnClickListener {
+            snapshotInfoPanel.visibility = if (snapshotInfoPanel.visibility == View.VISIBLE) {
+                View.GONE
+            } else {
+                View.VISIBLE
+            }
+        }
+        findViewById<View>(R.id.btn_snapshot_info_close).setOnClickListener {
+            snapshotInfoPanel.visibility = View.GONE
+        }
+        if (!uiState.getBoolean("snapshot_bubble_tooltip_shown", false)) {
+            snapshotInfoPanel.visibility = View.VISIBLE
+            uiState.edit().putBoolean("snapshot_bubble_tooltip_shown", true).apply()
+        }
 
         findViewById<Button>(R.id.btn_show).setOnClickListener { togglePreview() }
         setupRepeatDirectionButton(R.id.btn_up) { moveY(-step) }
@@ -960,7 +1010,7 @@ class MainActivity : AppCompatActivity() {
         if (m.containsKey(BubblePosProvider.KEY_DEBUG)) {
             debugEnabled = m[BubblePosProvider.KEY_DEBUG] == "1"
         } else {
-            debugEnabled = fromSettings("debug", if (debugEnabled) 1 else 0) == 1
+            debugEnabled = fromSettings("debug", if (BubblePrefs.DEFAULT_DEBUG_ENABLED) 1 else 0) == 1
         }
         maxLen = m[BubblePosProvider.KEY_MAX_LEN]?.toIntOrNull() ?: fromSettings("max_len", maxLen)
         if (maxLen !in MAX_LEN_VALUES) maxLen = BubblePrefs.DEFAULT_MAX_LEN
