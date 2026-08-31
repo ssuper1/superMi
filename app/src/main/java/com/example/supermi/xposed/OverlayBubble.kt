@@ -667,6 +667,16 @@ object OverlayBubble {
         }
     }
 
+    /** 来源 App 在前台时显示可点击气泡，但保留查看器占用状态。 */
+    fun showSnapshotBubbleWhileViewerOpen() {
+        val ctx = systemContext() ?: return
+        mainHandler.post {
+            if (snapshotViewerOpen && snapshotUris.isNotEmpty()) {
+                rebuildSnapshotBubble(ctx)
+            }
+        }
+    }
+
     private fun showSnapshotBubble(ctx: Context, values: BubbleValues) {
         dismissSnapshot()
         if (snapshotUris.isEmpty()) return

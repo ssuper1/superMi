@@ -96,6 +96,7 @@
         <activity
             android:name=".SnapshotViewerActivity"
             android:exported="false"
+            android:launchMode="singleTask"
             android:enableOnBackInvokedCallback="true"
             android:theme="@style/Theme.SuperMi.Viewer"
             android:taskAffinity=""

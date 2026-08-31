@@ -93,6 +93,17 @@ class SnapshotViewerActivity : ComponentActivity() {
     private lateinit var pageIndicator: TextView
     private lateinit var bar: LinearLayout
 
+    /** 来源 App 前台时点击气泡会复用后台查看器，避免同时存在两个查看器实例。 */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        sourceAppLaunched = false
+        sourceOpenPendingClose = false
+        sourceOpenStopped = false
+        // 该实例重新成为当前查看器，后续关闭时需要再次恢复气泡。
+        restoreBubbleSent = false
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -514,6 +525,10 @@ class SnapshotViewerActivity : ComponentActivity() {
                     sourceOpenPendingClose = true
                 }
                 startActivity(launch)
+                // 查看器切到来源 App 后，气泡应重新显示在目标 App 上方；
+                // 但不能把仍然存在的查看器误标记为已关闭，否则点击气泡时
+                // 旧查看器和新查看器会同时争抢全局状态。
+                showBubbleWhileSourceAppOpen()
             } else {
                 Toast.makeText(this, "无法打开来源应用", Toast.LENGTH_SHORT).show()
             }
@@ -581,6 +596,19 @@ class SnapshotViewerActivity : ComponentActivity() {
         try {
             sendBroadcast(
                 Intent("com.example.supermi.RESTORE_SNAPSHOT")
+                    .setPackage("android"),
+                "com.example.supermi.permission.SHOW_SNAPSHOT"
+            )
+        } catch (_: Throwable) {
+        }
+    }
+
+    /** 来源 App 前台期间只显示气泡，不清除 system_server 的查看器占用状态。 */
+    private fun showBubbleWhileSourceAppOpen() {
+        if (uris.isEmpty()) return
+        try {
+            sendBroadcast(
+                Intent("com.example.supermi.SHOW_SNAPSHOT_FOR_SOURCE")
                     .setPackage("android"),
                 "com.example.supermi.permission.SHOW_SNAPSHOT"
             )

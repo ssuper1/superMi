@@ -147,10 +147,17 @@ class HookEntry : IXposedHookLoadPackage {
         if (snapshotRestoreReceiverRegistered) return
         val ctx = SystemContextHolder.context() ?: return
         try {
-            val filter = IntentFilter("com.example.supermi.RESTORE_SNAPSHOT")
+            val filter = IntentFilter().apply {
+                addAction("com.example.supermi.RESTORE_SNAPSHOT")
+                addAction("com.example.supermi.SHOW_SNAPSHOT_FOR_SOURCE")
+            }
             ctx.registerReceiver(object : BroadcastReceiver() {
                 override fun onReceive(context: Context, intent: Intent) {
-                    OverlayBubble.restoreSnapshotBubble()
+                    if (intent.action == "com.example.supermi.SHOW_SNAPSHOT_FOR_SOURCE") {
+                        OverlayBubble.showSnapshotBubbleWhileViewerOpen()
+                    } else {
+                        OverlayBubble.restoreSnapshotBubble()
+                    }
                 }
             }, filter, "com.example.supermi.permission.SHOW_SNAPSHOT", null, Context.RECEIVER_EXPORTED)
             snapshotRestoreReceiverRegistered = true
