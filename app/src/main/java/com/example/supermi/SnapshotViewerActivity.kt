@@ -97,6 +97,24 @@ class SnapshotViewerActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        val newUris = readUris(intent)
+        if (newUris.isNotEmpty()) {
+            uris.clear()
+            uris.addAll(newUris)
+            sources.clear()
+            intent.getStringArrayListExtra(EXTRA_SOURCES)?.let { sources.addAll(it) }
+            sourcePackages.clear()
+            intent.getStringArrayListExtra(EXTRA_SOURCE_PACKAGES)?.let { sourcePackages.addAll(it) }
+            index = intent.getIntExtra(EXTRA_INDEX, 0).coerceIn(0, uris.lastIndex)
+            originX = intent.getIntExtra(EXTRA_ORIGIN_X, -1)
+            originY = intent.getIntExtra(EXTRA_ORIGIN_Y, -1)
+            originW = intent.getIntExtra(EXTRA_ORIGIN_W, 0)
+            originH = intent.getIntExtra(EXTRA_ORIGIN_H, 0)
+            hasOrigin = originX >= 0 && originY >= 0 && originW > 0 && originH > 0
+            bitmapCache.clear()
+            failText.visibility = View.GONE
+            showIndex(index, force = true)
+        }
         sourceAppLaunched = false
         sourceOpenPendingClose = false
         sourceOpenStopped = false
@@ -107,14 +125,7 @@ class SnapshotViewerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val list = intent.getStringArrayListExtra(EXTRA_URIS)
-        if (!list.isNullOrEmpty()) {
-            uris.addAll(list.mapNotNull { runCatching { Uri.parse(it) }.getOrNull() })
-        } else {
-            intent.getStringExtra(EXTRA_URI)?.let { u ->
-                runCatching { Uri.parse(u) }.getOrNull()?.let { uris.add(it) }
-            }
-        }
+        uris.addAll(readUris(intent))
         intent.getStringArrayListExtra(EXTRA_SOURCES)?.let { sources.addAll(it) }
         intent.getStringArrayListExtra(EXTRA_SOURCE_PACKAGES)?.let { sourcePackages.addAll(it) }
         index = intent.getIntExtra(EXTRA_INDEX, 0).coerceIn(0, (uris.size - 1).coerceAtLeast(0))
@@ -538,6 +549,16 @@ class SnapshotViewerActivity : ComponentActivity() {
             sourceOpenStopped = false
             Toast.makeText(this, "无法打开来源应用", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun readUris(sourceIntent: Intent): List<Uri> {
+        val list = sourceIntent.getStringArrayListExtra(EXTRA_URIS)
+        if (!list.isNullOrEmpty()) {
+            return list.mapNotNull { runCatching { Uri.parse(it) }.getOrNull() }
+        }
+        return sourceIntent.getStringExtra(EXTRA_URI)?.let { value ->
+            runCatching { Uri.parse(value) }.getOrNull()?.let(::listOf)
+        }.orEmpty()
     }
 
     /** 用户按 Home 离开时，查看器不一定会进入 onDestroy；先恢复气泡再结束查看器。 */

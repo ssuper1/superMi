@@ -63,6 +63,8 @@ object OverlayBubble {
     private var snapshotParams: WindowManager.LayoutParams? = null
     private var snapshotStyle: BubbleValues? = null
     private var snapshotViewerOpen = false
+    /** 查看器跳转到来源 App 后，允许气泡在查看器仍存活时继续更新。 */
+    private var snapshotBubbleAllowedWhileViewerOpen = false
     /** 防止查看器异常退出/广播丢失后永久阻塞后续截图气泡。 */
     private var snapshotViewerOpenedAt = 0L
 
@@ -284,7 +286,7 @@ object OverlayBubble {
                                 "view=${snapshotView != null} dismiss=${snapshotDismiss != null} " +
                                 "uris=${snapshotUris.size}"
                         )
-                        if (!snapshotViewerOpen) {
+                        if (!snapshotViewerOpen || snapshotBubbleAllowedWhileViewerOpen) {
                             showSnapshotBubble(ctx, values)
                         } else {
                             XposedBridge.log("$TAG snapshot bubble deferred while viewer is open")
@@ -310,6 +312,7 @@ object OverlayBubble {
                 snapshotUris.clear()
                 snapshotSources.clear()
                 snapshotBitmaps.clear()
+                snapshotBubbleAllowedWhileViewerOpen = false
                 dismissSnapshot()
                 ctx.sendBroadcast(
                     Intent("com.example.supermi.CLEAR_SNAPSHOTS").setPackage("com.example.supermi")
@@ -348,7 +351,9 @@ object OverlayBubble {
                     snapshotSources.remove(uri)
                     snapshotBitmaps.remove(uri)
                     dismissSnapshot()
-                    if (snapshotUris.isNotEmpty() && !snapshotViewerOpen) {
+                    if (snapshotUris.isNotEmpty() &&
+                        (!snapshotViewerOpen || snapshotBubbleAllowedWhileViewerOpen)
+                    ) {
                         rebuildSnapshotBubble(ctx)
                     }
                 }
@@ -661,6 +666,7 @@ object OverlayBubble {
         mainHandler.post {
             snapshotViewerOpen = false
             snapshotViewerOpenedAt = 0L
+            snapshotBubbleAllowedWhileViewerOpen = false
             if (snapshotView == null && snapshotUris.isNotEmpty()) {
                 rebuildSnapshotBubble(ctx)
             }
@@ -672,6 +678,7 @@ object OverlayBubble {
         val ctx = systemContext() ?: return
         mainHandler.post {
             if (snapshotViewerOpen && snapshotUris.isNotEmpty()) {
+                snapshotBubbleAllowedWhileViewerOpen = true
                 rebuildSnapshotBubble(ctx)
             }
         }
@@ -785,6 +792,7 @@ object OverlayBubble {
         if (uris.isEmpty()) return
         val i = index.coerceIn(0, uris.size - 1)
         try {
+            snapshotBubbleAllowedWhileViewerOpen = false
             val clip = ClipData.newRawUri("snapshots", uris[0])
             for (u in uris.drop(1)) clip.addItem(ClipData.Item(u))
             val intent = Intent().apply {
@@ -822,6 +830,7 @@ object OverlayBubble {
         } catch (t: Throwable) {
             snapshotViewerOpen = false
             snapshotViewerOpenedAt = 0L
+            snapshotBubbleAllowedWhileViewerOpen = false
             XposedBridge.log("$TAG openSnapshotViewer failed: $t")
         }
     }
