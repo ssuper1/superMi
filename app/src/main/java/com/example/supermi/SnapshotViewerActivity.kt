@@ -139,7 +139,7 @@ class SnapshotViewerActivity : ComponentActivity() {
         originW = intent.getIntExtra(EXTRA_ORIGIN_W, 0)
         originH = intent.getIntExtra(EXTRA_ORIGIN_H, 0)
         hasOrigin = originX >= 0 && originY >= 0 && originW > 0 && originH > 0
-        blurBackground = BubblePrefs.snapshotBgBlur(this)
+        blurBackground = BubblePrefs.snapshotBgBlurFresh(this)
         // 普通模式使用氛围背景；模糊模式使用系统背景模糊和一整块连续玻璃材质。
         // 设备不支持跨窗口模糊时，这个值会被系统忽略，材质层仍可独立降级。
         blurRadiusPx = if (blurBackground) dp(48) else 0

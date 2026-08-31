@@ -194,6 +194,10 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.btn_snapshot_info_close).setOnClickListener {
             snapshotInfoPanel.visibility = View.GONE
         }
+        findViewById<View>(R.id.btn_snapshot_refresh).setOnClickListener {
+            notifySnapshotBubbleRefresh()
+            Toast.makeText(this, "已检查截图气泡", Toast.LENGTH_SHORT).show()
+        }
         if (!uiState.getBoolean("snapshot_bubble_tooltip_shown", false)) {
             snapshotInfoPanel.visibility = View.VISIBLE
             uiState.edit().putBoolean("snapshot_bubble_tooltip_shown", true).apply()

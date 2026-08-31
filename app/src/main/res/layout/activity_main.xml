@@ -1197,6 +1197,20 @@
                             android:textColor="@color/text_tertiary"
                             android:textSize="11.5sp" />
                     </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/btn_snapshot_refresh"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:background="@drawable/bg_btn_ghost"
+                        android:clickable="true"
+                        android:contentDescription="刷新截图气泡"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:text="↻"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
                 <View

@@ -719,10 +719,36 @@ object OverlayBubble {
     fun refreshSnapshotBubble() {
         val ctx = systemContext() ?: return
         bgHandler.post {
-            val values = readBubbleValues(ctx)
+            val cachedValues = readBubbleValues(ctx)
+            val values = cachedValues.copy(
+                clickOpenSource = BubblePrefs.snapshotClickOpenSourceFresh(ctx)
+            )
+            val validUris = snapshotUris.filter { uri ->
+                snapshotBitmaps.containsKey(uri) || runCatching {
+                    ctx.contentResolver.openInputStream(uri)?.use { true } ?: false
+                }.getOrDefault(false)
+            }
             mainHandler.post {
+                val oldStyle = snapshotStyle
+                val invalid = snapshotUris.filter { it !in validUris }
+                invalid.forEach {
+                    snapshotUris.remove(it)
+                    snapshotSources.remove(it)
+                    snapshotBitmaps.remove(it)
+                }
                 snapshotStyle = values
-                if (snapshotUris.isNotEmpty() && snapshotView != null && !snapshotViewerOpen) {
+                if (snapshotViewerOpen) return@post
+                if (snapshotUris.isEmpty()) {
+                    XposedBridge.log("$TAG snapshot refresh: no recoverable snapshots")
+                    return@post
+                }
+                val attached = snapshotView?.isAttachedToWindow == true
+                val styleChanged = oldStyle?.clickOpenSource != values.clickOpenSource
+                if (!attached || styleChanged) {
+                    XposedBridge.log(
+                        "$TAG snapshot refresh: rebuilding bubble attached=$attached styleChanged=$styleChanged count=${snapshotUris.size}"
+                    )
+                    removeSnapshotBubble()
                     showSnapshotBubble(ctx, values, preserveAutoClose = true)
                 }
             }

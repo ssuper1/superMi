@@ -210,6 +210,20 @@ object BubblePrefs {
         return v
     }
 
+    /** 查看框启动时使用，不经过 3 秒缓存，确保背景模式切换后立即生效。 */
+    fun snapshotBgBlurFresh(ctx: Context?): Boolean {
+        val b = freshConfig(ctx)
+        if (b != null && b.containsKey("snapshot_bg_blur")) {
+            return b.getBoolean("snapshot_bg_blur", DEFAULT_SNAPSHOT_BG_BLUR)
+        }
+        val resolver = ctx?.contentResolver ?: return DEFAULT_SNAPSHOT_BG_BLUR
+        return Settings.System.getInt(
+            resolver,
+            "supermi_snapshot_bg_blur",
+            if (DEFAULT_SNAPSHOT_BG_BLUR) 1 else 0
+        ) == 1
+    }
+
     fun snapshotCornerDp(ctx: Context?): Int {
         val resolver = ctx?.contentResolver
         val v = config(ctx)?.getInt("snapshot_corner_dp")
