@@ -118,8 +118,10 @@ class SnapshotViewerActivity : ComponentActivity() {
         originH = intent.getIntExtra(EXTRA_ORIGIN_H, 0)
         hasOrigin = originX >= 0 && originY >= 0 && originW > 0 && originH > 0
         blurBackground = BubblePrefs.snapshotBgBlur(this)
-        // 普通模式使用氛围背景；模糊模式用较轻的系统模糊叠加毛玻璃蒙版。
-        blurRadiusPx = if (blurBackground) dp(30) else 0
+        // 普通模式使用氛围背景；模糊模式使用更明显的系统背景模糊，
+        // 再叠加半透明材质层、高光和细砂噪点，尽量接近系统级磨砂玻璃。
+        // 设备不支持跨窗口模糊时，这个值会被系统忽略，仍保留材质层作为降级效果。
+        blurRadiusPx = if (blurBackground) dp(44) else 0
 
         val window = window
         // 查看框只绘制在系统栏下方，顶部状态栏保持透明露出底层界面
@@ -259,18 +261,18 @@ class SnapshotViewerActivity : ComponentActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(10), dp(5), dp(10), dp(5))
-            // 玻璃面板：模糊模式上缘只压 10%、下缘约 55%，模糊透得出又像一块磨砂面板；
+            // 玻璃面板：上缘保留透光感、下缘加深以托住按钮，同时保留一条柔和高光边；
             // 黑底模式改用浅炭灰 + 顶部细线，和纯黑背景拉开层次
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 if (blurBackground) {
                     orientation = GradientDrawable.Orientation.TOP_BOTTOM
-                    colors = intArrayOf(0x241C1C1E.toInt(), 0x8514171B.toInt())
+                    colors = intArrayOf(0x301C1C1E.toInt(), 0x9A14171B.toInt())
                 } else {
                     // 普通模式保持原先明确的深黑操作区，不让氛围色冲淡底部层次。
                     setColor(0xFF151619.toInt())
                 }
-                setStroke(dp(1), 0x33FFFFFF.toInt())
+                setStroke(dp(1), if (blurBackground) 0x55FFFFFF else 0x33FFFFFF.toInt())
                 cornerRadii = floatArrayOf(
                     dp(20).toFloat(), dp(20).toFloat(),
                     dp(20).toFloat(), dp(20).toFloat(),
