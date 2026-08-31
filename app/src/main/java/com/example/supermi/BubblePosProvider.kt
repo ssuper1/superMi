@@ -40,6 +40,8 @@ class BubblePosProvider : ContentProvider() {
         const val KEY_BG_LIGHT = "bg_light"
         const val KEY_BG_MODE = "bg_mode"
         const val KEY_BG_BORDER = "bg_border"
+        const val KEY_BG_BORDER_DARK = "bg_border_dark"
+        const val KEY_BG_BORDER_LIGHT = "bg_border_light"
         const val KEY_DISMISS_SECS = "dismiss_secs"
         const val KEY_SNAPSHOT_MAX_COUNT = "snapshot_max_count"
         const val KEY_SNAPSHOT_TTL_SECS = "snapshot_ttl_secs"
@@ -118,6 +120,10 @@ class BubblePosProvider : ContentProvider() {
 
         @Volatile
         var bgBorder: Boolean = BubblePrefs.DEFAULT_BG_BORDER
+        @Volatile
+        var bgBorderDark: Boolean = BubblePrefs.DEFAULT_BG_BORDER
+        @Volatile
+        var bgBorderLight: Boolean = BubblePrefs.DEFAULT_BG_BORDER
 
         @Volatile
         var dismissSecs: Int = BubblePrefs.DEFAULT_DISMISS_SECS
@@ -148,6 +154,8 @@ class BubblePosProvider : ContentProvider() {
         try {
             val lines = File(ctx!!.filesDir, CONFIG_FILE).readLines()
             var bgModeSeen = false
+            var bgBorderDarkSeen = false
+            var bgBorderLightSeen = false
             for (line in lines) {
                 val i = line.indexOf('=')
                 if (i < 0) continue
@@ -188,7 +196,19 @@ class BubblePosProvider : ContentProvider() {
                         bgMode = v.toIntOrNull()?.coerceIn(BubblePrefs.BG_MODE_DARK, BubblePrefs.BG_MODE_SYSTEM) ?: bgMode
                         bgModeSeen = true
                     }
-                    KEY_BG_BORDER -> bgBorder = v != "0"
+                    KEY_BG_BORDER -> {
+                        bgBorder = v != "0"
+                        if (!bgBorderDarkSeen) bgBorderDark = bgBorder
+                        if (!bgBorderLightSeen) bgBorderLight = bgBorder
+                    }
+                    KEY_BG_BORDER_DARK -> {
+                        bgBorderDark = v != "0"
+                        bgBorderDarkSeen = true
+                    }
+                    KEY_BG_BORDER_LIGHT -> {
+                        bgBorderLight = v != "0"
+                        bgBorderLightSeen = true
+                    }
                     KEY_DISMISS_SECS -> dismissSecs = v.toIntOrNull()?.coerceIn(1, 10) ?: dismissSecs
                     KEY_DEBUG -> debug = v == "1"
                     KEY_DEBUG_TOAST -> debugToast = v != "0"
@@ -246,6 +266,8 @@ class BubblePosProvider : ContentProvider() {
             putBoolean(KEY_BG_LIGHT, bgLight)
             putInt(KEY_BG_MODE, bgMode)
             putBoolean(KEY_BG_BORDER, bgBorder)
+            putBoolean(KEY_BG_BORDER_DARK, bgBorderDark)
+            putBoolean(KEY_BG_BORDER_LIGHT, bgBorderLight)
             putInt(KEY_DISMISS_SECS, dismissSecs)
             putInt(KEY_GAP12_2, gap12_2)
             putInt(KEY_GAP12_3, gap12_3)

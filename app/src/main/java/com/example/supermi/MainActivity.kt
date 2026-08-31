@@ -77,6 +77,8 @@ class MainActivity : AppCompatActivity() {
     private var bgLight: Boolean = BubblePrefs.DEFAULT_BG_LIGHT
     private var bgMode: Int = BubblePrefs.DEFAULT_BG_MODE
     private var bgBorder: Boolean = BubblePrefs.DEFAULT_BG_BORDER
+    private var bgBorderDark: Boolean = BubblePrefs.DEFAULT_BG_BORDER
+    private var bgBorderLight: Boolean = BubblePrefs.DEFAULT_BG_BORDER
     private var dismissSecs: Int = BubblePrefs.DEFAULT_DISMISS_SECS
     private var snapshotMaxCount: Int = BubblePrefs.DEFAULT_SNAPSHOT_MAX_COUNT
     private var snapshotTtlSecs: Int = BubblePrefs.DEFAULT_SNAPSHOT_TTL_SECS
@@ -154,7 +156,7 @@ class MainActivity : AppCompatActivity() {
 
         loadConfig()
 
-        val bubbleInfoText = "点击「显示预览」，气泡会真实叠加在屏幕上方展示应用后的位置，不同图标个数布局需单独调整。"
+        val bubbleInfoText = "点击「显示预览」，气泡会真实叠加在屏幕上方展示应用后的位置，不同图标个数布局需单独调整。黑白背景边框线有无也单独设置"
         val bubbleInfoSpannable = SpannableString(bubbleInfoText)
         val bubbleInfoHighlight = "不同图标个数布局需单独调整"
         val bubbleInfoStart = bubbleInfoText.indexOf(bubbleInfoHighlight)
@@ -491,7 +493,9 @@ class MainActivity : AppCompatActivity() {
     private fun setBgMode(value: Int) {
         bgMode = value.coerceIn(BubblePrefs.BG_MODE_DARK, BubblePrefs.BG_MODE_SYSTEM)
         bgLight = effectiveBgLight(bgMode)
+        bgBorder = if (bgLight) bgBorderLight else bgBorderDark
         updateBgColorSeg()
+        updateBgBorderSeg()
         saveConfig()
         refreshPreview()
         notifySnapshotBubbleRefresh()
@@ -524,9 +528,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun setBgBorder(value: Boolean) {
         bgBorder = value
+        if (bgLight) bgBorderLight = value else bgBorderDark = value
         updateBgBorderSeg()
         saveConfig()
         refreshPreview()
+        notifySnapshotBubbleRefresh()
     }
 
     private fun updateBgBorderSeg() {
@@ -1148,11 +1154,18 @@ class MainActivity : AppCompatActivity() {
             fromSettings("bg_mode", if (bgLight) BubblePrefs.BG_MODE_LIGHT else BubblePrefs.BG_MODE_DARK)
         }
         bgLight = effectiveBgLight(bgMode)
-        bgBorder = if (m.containsKey(BubblePosProvider.KEY_BG_BORDER)) {
+        val legacyBorder = if (m.containsKey(BubblePosProvider.KEY_BG_BORDER)) {
             m[BubblePosProvider.KEY_BG_BORDER] != "0"
         } else {
             fromSettings("bg_border", if (bgBorder) 1 else 0) == 1
         }
+        bgBorderDark = m[BubblePosProvider.KEY_BG_BORDER_DARK]?.let { it != "0" }
+            ?: if (m.containsKey(BubblePosProvider.KEY_BG_BORDER)) legacyBorder
+            else fromSettings("bg_border_dark", if (legacyBorder) 1 else 0) == 1
+        bgBorderLight = m[BubblePosProvider.KEY_BG_BORDER_LIGHT]?.let { it != "0" }
+            ?: if (m.containsKey(BubblePosProvider.KEY_BG_BORDER)) legacyBorder
+            else fromSettings("bg_border_light", if (legacyBorder) 1 else 0) == 1
+        bgBorder = if (bgLight) bgBorderLight else bgBorderDark
         dismissSecs = m[BubblePosProvider.KEY_DISMISS_SECS]?.toIntOrNull()?.coerceIn(1, 10)
             ?: fromSettings("dismiss_secs", dismissSecs)
         snapshotMaxCount = m[BubblePosProvider.KEY_SNAPSHOT_MAX_COUNT]?.toIntOrNull()?.coerceIn(1, 3)
@@ -1224,6 +1237,8 @@ class MainActivity : AppCompatActivity() {
         BubblePosProvider.bgLight = bgLight
         BubblePosProvider.bgMode = bgMode
         BubblePosProvider.bgBorder = bgBorder
+        BubblePosProvider.bgBorderDark = bgBorderDark
+        BubblePosProvider.bgBorderLight = bgBorderLight
         BubblePosProvider.dismissSecs = dismissSecs
         BubblePosProvider.snapshotMaxCount = snapshotMaxCount
         BubblePosProvider.snapshotTtlSecs = snapshotTtlSecs
@@ -1264,6 +1279,8 @@ class MainActivity : AppCompatActivity() {
         m[BubblePosProvider.KEY_BG_LIGHT] = if (bgLight) "1" else "0"
         m[BubblePosProvider.KEY_BG_MODE] = "$bgMode"
         m[BubblePosProvider.KEY_BG_BORDER] = if (bgBorder) "1" else "0"
+        m[BubblePosProvider.KEY_BG_BORDER_DARK] = if (bgBorderDark) "1" else "0"
+        m[BubblePosProvider.KEY_BG_BORDER_LIGHT] = if (bgBorderLight) "1" else "0"
         m[BubblePosProvider.KEY_DISMISS_SECS] = "$dismissSecs"
         m[BubblePosProvider.KEY_SNAPSHOT_MAX_COUNT] = "$snapshotMaxCount"
         m[BubblePosProvider.KEY_SNAPSHOT_TTL_SECS] = "$snapshotTtlSecs"

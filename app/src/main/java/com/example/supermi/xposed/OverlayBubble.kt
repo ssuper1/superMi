@@ -63,6 +63,8 @@ object OverlayBubble {
     private var snapshotDismiss: Runnable? = null
     private var snapshotParams: WindowManager.LayoutParams? = null
     private var snapshotStyle: BubbleValues? = null
+    /** 防止系统主题广播与设置广播并发时，旧的异步读取覆盖新样式。 */
+    @Volatile private var snapshotRefreshSequence = 0L
     private var snapshotViewerOpen = false
     /** 查看器跳转到来源 App 后，允许气泡在查看器仍存活时继续更新。 */
     private var snapshotBubbleAllowedWhileViewerOpen = false
@@ -718,17 +720,22 @@ object OverlayBubble {
     /** 设置“点击气泡后”改变时，立即刷新当前截图气泡的图标样式。 */
     fun refreshSnapshotBubble() {
         val ctx = systemContext() ?: return
+        val sequence = synchronized(this) {
+            snapshotRefreshSequence += 1L
+            snapshotRefreshSequence
+        }
         bgHandler.post {
+            // 统一强制拉取最新配置，避免 3 秒缓存让底色/边框与点击行为不同步。
+            BubblePrefs.refreshCachedConfig(ctx)
             val cachedValues = readBubbleValues(ctx)
-            val values = cachedValues.copy(
-                clickOpenSource = BubblePrefs.snapshotClickOpenSourceFresh(ctx)
-            )
+            val values = cachedValues
             val validUris = snapshotUris.filter { uri ->
                 snapshotBitmaps.containsKey(uri) || runCatching {
                     ctx.contentResolver.openInputStream(uri)?.use { true } ?: false
                 }.getOrDefault(false)
             }
             mainHandler.post {
+                if (sequence != snapshotRefreshSequence) return@post
                 val oldStyle = snapshotStyle
                 val invalid = snapshotUris.filter { it !in validUris }
                 invalid.forEach {
@@ -745,7 +752,12 @@ object OverlayBubble {
                     return@post
                 }
                 val attached = snapshotView?.isAttachedToWindow == true
-                val styleChanged = oldStyle?.clickOpenSource != values.clickOpenSource
+                val styleChanged = oldStyle == null ||
+                    oldStyle.clickOpenSource != values.clickOpenSource ||
+                    oldStyle.bgLight != values.bgLight ||
+                    oldStyle.bgBorder != values.bgBorder ||
+                    oldStyle.bgAlpha != values.bgAlpha ||
+                    oldStyle.iconSizeDp != values.iconSizeDp
                 if (!attached || styleChanged) {
                     XposedBridge.log(
                         "$TAG snapshot refresh: rebuilding bubble attached=$attached styleChanged=$styleChanged count=${snapshotUris.size}"

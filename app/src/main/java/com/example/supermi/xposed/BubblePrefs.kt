@@ -325,10 +325,15 @@ object BubblePrefs {
 
     fun bgBorder(ctx: Context?): Boolean {
         val resolver = ctx?.contentResolver
-        val v = config(ctx)?.getBoolean("bg_border")
-            ?: resolver?.let { Settings.System.getInt(it, "supermi_bg_border", if (DEFAULT_BG_BORDER) 1 else 0) == 1 }
-            ?: DEFAULT_BG_BORDER
-        return v
+        val light = bgLight(ctx)
+        val specificKey = if (light) "bg_border_light" else "bg_border_dark"
+        val b = config(ctx)
+        if (b?.containsKey(specificKey) == true) return b.getBoolean(specificKey, DEFAULT_BG_BORDER)
+        if (b?.containsKey("bg_border") == true) return b.getBoolean("bg_border", DEFAULT_BG_BORDER)
+        val specificSetting = if (light) "supermi_bg_border_light" else "supermi_bg_border_dark"
+        val legacy = resolver?.let { Settings.System.getInt(it, "supermi_bg_border", if (DEFAULT_BG_BORDER) 1 else 0) }
+            ?: if (DEFAULT_BG_BORDER) 1 else 0
+        return resolver?.let { Settings.System.getInt(it, specificSetting, legacy) == 1 } ?: (legacy == 1)
     }
 
     fun maxLen(ctx: Context?): Int {
@@ -387,6 +392,14 @@ object BubblePrefs {
         return null
     }
 
+    /** 设置页发出刷新通知后，立即替换短期缓存，避免读取到旧的气泡样式。 */
+    fun refreshCachedConfig(ctx: Context?): Boolean {
+        val b = freshConfig(ctx) ?: return false
+        cachedConfig = b
+        cachedAt = System.currentTimeMillis()
+        return true
+    }
+
     private fun config(ctx: Context?): Bundle? {
         val resolver = ctx?.contentResolver ?: return null
         val now = System.currentTimeMillis()
@@ -436,6 +449,8 @@ object BubblePrefs {
             b.getBoolean("bg_light", DEFAULT_BG_LIGHT).toString(),
             b.getInt("bg_mode", if (b.getBoolean("bg_light", DEFAULT_BG_LIGHT)) BG_MODE_LIGHT else BG_MODE_DARK).toString(),
             b.getBoolean("bg_border", DEFAULT_BG_BORDER).toString(),
+            b.getBoolean("bg_border_dark", b.getBoolean("bg_border", DEFAULT_BG_BORDER)).toString(),
+            b.getBoolean("bg_border_light", b.getBoolean("bg_border", DEFAULT_BG_BORDER)).toString(),
             b.getInt("dismiss_secs", DEFAULT_DISMISS_SECS).toString()
             ,b.getInt("snapshot_max_count", DEFAULT_SNAPSHOT_MAX_COUNT).toString(), b.getInt("snapshot_ttl_secs", DEFAULT_SNAPSHOT_TTL_SECS).toString(), b.getBoolean("snapshot_auto_clean", DEFAULT_SNAPSHOT_AUTO_CLEAN).toString(), b.getBoolean("snapshot_source_by_name", DEFAULT_SNAPSHOT_SOURCE_BY_NAME).toString(), b.getInt("snapshot_delete_hours", DEFAULT_SNAPSHOT_DELETE_HOURS).toString(), b.getBoolean("snapshot_auto_close", DEFAULT_SNAPSHOT_AUTO_CLOSE).toString(), b.getBoolean("snapshot_open_source_close", DEFAULT_SNAPSHOT_OPEN_SOURCE_CLOSE).toString(), b.getBoolean("snapshot_click_open_source", DEFAULT_SNAPSHOT_CLICK_OPEN_SOURCE).toString(), b.getBoolean("snapshot_bg_blur", DEFAULT_SNAPSHOT_BG_BLUR).toString(), b.getInt("snapshot_corner_dp", DEFAULT_SNAPSHOT_CORNER_DP).toString(), b.getString("snapshot_dir") ?: ""
         ).joinToString("\u0000")
@@ -459,6 +474,8 @@ object BubblePrefs {
             Settings.System.putInt(cr, "supermi_bg_light", if (b.getBoolean("bg_light", DEFAULT_BG_LIGHT)) 1 else 0)
             Settings.System.putInt(cr, "supermi_bg_mode", b.getInt("bg_mode", if (b.getBoolean("bg_light", DEFAULT_BG_LIGHT)) BG_MODE_LIGHT else BG_MODE_DARK))
             Settings.System.putInt(cr, "supermi_bg_border", if (b.getBoolean("bg_border", DEFAULT_BG_BORDER)) 1 else 0)
+            Settings.System.putInt(cr, "supermi_bg_border_dark", if (b.getBoolean("bg_border_dark", b.getBoolean("bg_border", DEFAULT_BG_BORDER))) 1 else 0)
+            Settings.System.putInt(cr, "supermi_bg_border_light", if (b.getBoolean("bg_border_light", b.getBoolean("bg_border", DEFAULT_BG_BORDER))) 1 else 0)
             Settings.System.putInt(cr, "supermi_dismiss_secs", b.getInt("dismiss_secs", DEFAULT_DISMISS_SECS))
             Settings.System.putInt(cr, KEY_MAX_LEN, b.getInt("max_len", DEFAULT_MAX_LEN))
             Settings.System.putInt(cr, "supermi_gap12_2", b.getInt("gap12_2", 6))
@@ -504,6 +521,9 @@ object BubblePrefs {
                 } else it.coerceIn(BG_MODE_DARK, BG_MODE_SYSTEM)
             })
             putBoolean("bg_border", Settings.System.getInt(cr, "supermi_bg_border", if (DEFAULT_BG_BORDER) 1 else 0) == 1)
+            val legacyBorder = Settings.System.getInt(cr, "supermi_bg_border", if (DEFAULT_BG_BORDER) 1 else 0)
+            putBoolean("bg_border_dark", Settings.System.getInt(cr, "supermi_bg_border_dark", legacyBorder) == 1)
+            putBoolean("bg_border_light", Settings.System.getInt(cr, "supermi_bg_border_light", legacyBorder) == 1)
             putInt("dismiss_secs", Settings.System.getInt(cr, "supermi_dismiss_secs", DEFAULT_DISMISS_SECS))
             putInt("max_len", Settings.System.getInt(cr, KEY_MAX_LEN, DEFAULT_MAX_LEN))
             putInt("gap12_2", Settings.System.getInt(cr, "supermi_gap12_2", Settings.System.getInt(cr, "supermi_gap12", 6)))
